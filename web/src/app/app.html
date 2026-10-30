@@ -1,0 +1,28 @@
+<div class="flex h-screen overflow-hidden">
+  <aside class="hidden md:flex shrink-0 transition-[width] duration-200" [style.width.rem]="collapsed() ? 4.5 : 15">
+    <app-sidebar [collapsed]="collapsed()" (toggle)="collapsed.set(!collapsed())" />
+  </aside>
+
+  <p-drawer [(visible)]="drawerOpen" [showCloseIcon]="false" styleClass="!w-60">
+    <ng-template #headless>
+      <app-sidebar [collapsed]="false" (toggle)="drawerOpen.set(false)" />
+    </ng-template>
+  </p-drawer>
+
+  <div class="flex-1 min-w-0 flex flex-col">
+    <header class="md:hidden flex items-center gap-1 h-14 px-2 shrink-0 bg-ink text-surface-0">
+      <div class="app-dark">
+        <p-button icon="pi pi-bars" [text]="true" severity="secondary" ariaLabel="Abrir menú" (onClick)="drawerOpen.set(true)" />
+      </div>
+      <a routerLink="/" class="flex items-center gap-2 no-underline text-surface-0">
+        <app-logo [size]="24" /><span class="k-display text-lg font-medium">Klavyra</span>
+      </a>
+    </header>
+    <main class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
+<p-toast position="bottom-right" />
+<p-confirmdialog />

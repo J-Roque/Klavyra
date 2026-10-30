@@ -1,0 +1,151 @@
+@layer theme, base, primeng, components, utilities;
+
+@import "tailwindcss";
+@plugin "tailwindcss-primeui";
+@import "primeicons/primeicons.css";
+@import "@fontsource-variable/fraunces/opsz.css";
+@import "@fontsource-variable/fraunces/opsz-italic.css";
+@import "@fontsource-variable/manrope";
+
+@custom-variant dark (&:where(.app-dark, .app-dark *));
+
+@theme {
+  --color-ink: #0b1713;
+  --color-ink-2: #12211b;
+  --color-paper: #f7f4ec;
+  --color-brass: #e0b354;
+  --color-brass-hover: #ebc36d;
+  --color-felt: #3fb08c;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Manrope Variable", system-ui, sans-serif;
+  background: var(--color-paper);
+  color: var(--p-text-color);
+  -webkit-font-smoothing: antialiased;
+}
+
+:root {
+  --p-font-family: "Manrope Variable", system-ui, sans-serif;
+}
+
+/* PrimeNG resolves form-field tokens at :root, so ink panels have to set them again. */
+.app-dark {
+  --p-inputtext-background: var(--p-surface-950);
+  --p-inputtext-color: var(--p-surface-0);
+  --p-inputtext-border-color: var(--p-surface-600);
+  --p-inputtext-hover-border-color: var(--p-surface-400);
+  --p-inputtext-placeholder-color: var(--p-surface-400);
+  --p-select-background: var(--p-surface-950);
+  --p-select-color: var(--p-surface-0);
+  --p-select-border-color: var(--p-surface-600);
+  --p-select-hover-border-color: var(--p-surface-400);
+  --p-select-dropdown-color: var(--p-surface-300);
+  --p-select-overlay-background: var(--p-surface-800);
+  --p-select-overlay-border-color: var(--p-surface-600);
+  --p-select-option-color: var(--p-surface-0);
+  --p-select-option-focus-background: var(--p-surface-700);
+  --p-select-option-focus-color: var(--p-surface-0);
+  --p-popover-background: var(--p-surface-900);
+  --p-popover-border-color: var(--p-surface-600);
+  --p-popover-color: var(--p-surface-0);
+}
+
+/* The signature action: a PrimeNG button in brass, with its own hover and focus states. */
+.p-button.k-brass {
+  --p-button-primary-background: var(--color-brass);
+  --p-button-primary-border-color: var(--color-brass);
+  --p-button-primary-color: var(--color-ink);
+  --p-button-primary-hover-background: var(--color-brass-hover);
+  --p-button-primary-hover-border-color: var(--color-brass-hover);
+  --p-button-primary-hover-color: var(--color-ink);
+  --p-button-primary-active-background: var(--color-brass-hover);
+  --p-button-primary-active-border-color: var(--color-brass-hover);
+  --p-button-primary-active-color: var(--color-ink);
+  --p-button-primary-focus-ring-color: var(--color-brass);
+  font-weight: 700;
+}
+
+/* A sound source that is on. */
+.p-button.k-on {
+  background: color-mix(in srgb, var(--color-felt) 22%, transparent);
+  border-color: var(--color-felt);
+  color: var(--p-surface-0);
+}
+
+/* The key to press now in the Roblox view. */
+.k-token-now {
+  border-radius: 0.25rem;
+  background: var(--color-brass);
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+@layer components {
+  .k-display {
+    font-family: "Fraunces Variable", Georgia, serif;
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+  }
+
+  .k-eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* One octave of piano keys, tiled: Klavyra's signature motif. */
+  .k-keys {
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='98' height='40' preserveAspectRatio='none'%3E%3Crect width='98' height='40' fill='%23f7f4ec'/%3E%3Cg fill='%23c9c3b2'%3E%3Crect x='13' width='1' height='40'/%3E%3Crect x='27' width='1' height='40'/%3E%3Crect x='41' width='1' height='40'/%3E%3Crect x='55' width='1' height='40'/%3E%3Crect x='69' width='1' height='40'/%3E%3Crect x='83' width='1' height='40'/%3E%3Crect x='97' width='1' height='40'/%3E%3C/g%3E%3Cg fill='%230b1713'%3E%3Crect x='9' width='9' height='25' rx='1'/%3E%3Crect x='23' width='9' height='25' rx='1'/%3E%3Crect x='51' width='9' height='25' rx='1'/%3E%3Crect x='65' width='9' height='25' rx='1'/%3E%3Crect x='79' width='9' height='25' rx='1'/%3E%3C/g%3E%3C/svg%3E")
+      repeat-x left top / 98px 100%;
+  }
+
+  /* p-fileupload as the drop zone of the hero panel */
+  .klav-upload .p-fileupload {
+    background: transparent;
+    border: 0;
+  }
+  .klav-upload .p-fileupload-header,
+  .klav-upload .p-progressbar,
+  .klav-upload .p-message {
+    display: none;
+  }
+  .klav-upload .p-fileupload-content {
+    background: color-mix(in srgb, white 3%, transparent);
+    border: 1px dashed color-mix(in srgb, white 28%, transparent);
+    border-radius: 0.875rem;
+    padding: 2rem 1rem;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .klav-upload .p-fileupload-content:hover,
+  .klav-upload .p-fileupload-highlight {
+    border-color: var(--color-brass);
+    background: color-mix(in srgb, var(--color-brass) 8%, transparent);
+  }
+
+  .k-divider.p-divider .p-divider-content {
+    background: var(--color-ink-2);
+    color: var(--p-surface-300);
+  }
+}
