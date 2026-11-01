@@ -129,6 +129,34 @@ public sealed class ProjectsApiTests(KlavyraFactory factory) : IClassFixture<Kla
         }
     }
 
+    [Fact]
+    public async Task Failed_project_can_be_retried_once_it_is_finished()
+    {
+        factory.Worker.Fail = true;
+        ProjectDto project;
+        try
+        {
+            var created = await CreateAsync(new() { ["url"] = "https://example.com/retry.mp3", ["engine"] = "muscriptor", ["model"] = "large" });
+            project = (await created.Content.ReadFromJsonAsync<ProjectDto>(Json))!;
+            await WaitFinishedAsync(project.Id);
+        }
+        finally
+        {
+            factory.Worker.Fail = false;
+        }
+
+        var retried = await _client.PostAsync($"/api/projects/{project.Id}/retry", null);
+        Assert.Equal(HttpStatusCode.OK, retried.StatusCode);
+
+        var done = await WaitFinishedAsync(project.Id);
+        Assert.Equal(Domain.ProjectStatus.Done, done.Status);
+        Assert.Null(done.Error);
+        Assert.Equal(2, factory.Worker.Requests.Count(r => r.GetProperty("url").GetString() == "https://example.com/retry.mp3" && r.GetProperty("model").GetString() == "large"));
+
+        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsync($"/api/projects/{project.Id}/retry", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsync($"/api/projects/{Guid.NewGuid()}/retry", null)).StatusCode);
+    }
+
     [Theory]
     [InlineData(null, null)] // no source
     [InlineData("ftp://x.com/a.mp3", null)] // bad scheme

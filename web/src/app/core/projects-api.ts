@@ -28,6 +28,10 @@ export class ProjectsApi {
     return this.http.delete<void>(`/api/projects/${id}`);
   }
 
+  retry(id: string) {
+    return this.http.post<Project>(`/api/projects/${id}/retry`, null);
+  }
+
   playerData(id: string) {
     return this.http.get<PlayerData>(this.fileUrl(id, 'notes'));
   }

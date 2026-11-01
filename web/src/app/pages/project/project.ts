@@ -50,6 +50,7 @@ export class ProjectPage implements OnDestroy {
   protected readonly tab = signal<'keys' | 'score' | 'roblox'>('keys');
   /** The score is drawn the first time it is opened and then kept, because drawing it is slow. */
   protected readonly scoreOpened = signal(false);
+  protected readonly retrying = signal(false);
 
   protected readonly rates = [0.25, 0.5, 0.75, 1].map((r) => ({ label: `${r}×`, value: r }));
   protected readonly hands = [
@@ -119,6 +120,20 @@ export class ProjectPage implements OnDestroy {
   protected openView(view: 'keys' | 'score' | 'roblox'): void {
     this.tab.set(view);
     if (view === 'score') this.scoreOpened.set(true);
+  }
+
+  protected retry(): void {
+    this.retrying.set(true);
+    this.api.retry(this.id()).subscribe({
+      next: (p) => {
+        this.project.set(p);
+        this.retrying.set(false);
+      },
+      error: () => {
+        this.retrying.set(false);
+        this.messages.add({ severity: 'error', summary: 'No se pudo reintentar', detail: 'Comprueba que Klavyra sigue en ejecución.' });
+      },
+    });
   }
 
   protected seekToQuarter(quarter: number): void {
