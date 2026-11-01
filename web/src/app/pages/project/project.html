@@ -32,6 +32,7 @@
             <i class="pi pi-exclamation-triangle text-3xl text-red-600"></i>
             <h2 class="k-display text-2xl font-normal mt-3 mb-2">La transcripción falló</h2>
             <p class="m-0 text-sm text-muted-color break-all">{{ p.error }}</p>
+            <p-button class="inline-block mt-5" label="Reintentar" icon="pi pi-refresh" [loading]="retrying()" (onClick)="retry()" />
           </div>
         </div>
       }
