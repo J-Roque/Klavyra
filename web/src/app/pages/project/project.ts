@@ -51,6 +51,12 @@ export class ProjectPage implements OnDestroy {
   /** The score is drawn the first time it is opened and then kept, because drawing it is slow. */
   protected readonly scoreOpened = signal(false);
   protected readonly retrying = signal(false);
+  private readonly now = signal(Date.now());
+  private readonly stepSince = signal(Date.now());
+  private readonly clock = setInterval(() => this.now.set(Date.now()), 15_000);
+  private stepKey = '';
+  /** Whole minutes in the current step, as seen from this page. */
+  protected readonly stepMinutes = computed(() => Math.floor((this.now() - this.stepSince()) / 60_000));
 
   protected readonly rates = [0.25, 0.5, 0.75, 1].map((r) => ({ label: `${r}×`, value: r }));
   protected readonly hands = [
@@ -97,6 +103,15 @@ export class ProjectPage implements OnDestroy {
       const id = this.id();
       untracked(() => this.load(id));
     });
+    effect(() => {
+      const p = this.project();
+      const key = `${p?.status}|${p?.message}`;
+      if (key !== this.stepKey) {
+        this.stepKey = key;
+        this.stepSince.set(Date.now());
+        this.now.set(Date.now());
+      }
+    });
     inject(ProgressHub).onUpdate((p) => {
       if (p.id !== this.project()?.id) return;
       const wasDone = this.project()?.status === 'Done';
@@ -106,6 +121,7 @@ export class ProjectPage implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    clearInterval(this.clock);
     this.player()?.destroy();
   }
 

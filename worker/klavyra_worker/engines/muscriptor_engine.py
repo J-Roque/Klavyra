@@ -5,14 +5,20 @@ Hugging Face and `uv run hf auth login` (or HF_TOKEN) once. We keep only the pia
 model labelled nothing as piano, every non-drum track is used so the user still gets a piano reduction.
 """
 
+import os
 import shutil
 import subprocess
 import sys
+import threading
+from collections import deque
 from pathlib import Path
 
 from ..models import Note, Transcription
+from .base import Report
+from .download import UPDATE_SECONDS, DownloadMeter
 
 PIANO_PROGRAMS = range(0, 8)  # General MIDI acoustic/electric pianos, harpsichord, clavinet
+MEMORY_ERRORS = ("invalid python storage", "out of memory", "not enough memory", "defaultcpuallocator", "paging file")
 
 
 def _cli() -> list[str]:
@@ -31,21 +37,96 @@ class MuScriptorEngine:
     def __init__(self, model: str = "small", **_):
         self.model = model
 
-    def transcribe(self, wav: Path, work_dir: Path) -> Transcription:
+    def transcribe(self, wav: Path, work_dir: Path, report: Report) -> Transcription:
         out = work_dir / "muscriptor"
         out.mkdir(parents=True, exist_ok=True)
         midi = out / "transcription.mid"
         # Restricting decoding to pianos turns the multi-instrument model into a piano transcriber.
         cmd = [*_cli(), "transcribe", str(wav), "--model", self.model, "--instruments", "acoustic_piano,electric_piano",
                "--output", str(midi)]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        if result.returncode != 0:
-            tail = "\n".join((result.stderr or result.stdout).strip().splitlines()[-8:])
-            raise RuntimeError(f"MuScriptor falló: {tail}")
+        label = self.model.capitalize()
+        finished = threading.Event()
+        known = set(_incomplete_files(self.model))  # left by a download that was cut short; it won't grow again
+        watcher = threading.Thread(target=_watch_download, args=(self.model, label, report, finished, known), daemon=True)
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        watcher.start()
+        tail: deque[str] = deque(maxlen=8)
+        try:
+            for line in process.stdout:
+                if line.strip():
+                    tail.append(line.rstrip())
+                if line.startswith("Loading model"):
+                    report("transcribing", 25, f"Cargando modelo {label}")
+                elif line.startswith("Transcribing "):
+                    finished.set()  # the model is on disk and in memory; only the notes are left
+                    report("transcribing", 25, f"Transcribiendo notas ({self.name})")
+            process.wait()
+        finally:
+            finished.set()
+            watcher.join()
+        if process.returncode != 0:
+            raise RuntimeError(explain_failure(label, "\n".join(tail)))
         produced = midi if midi.exists() else next(iter(sorted(out.rglob("*.mid"))), None)
         if produced is None:
             raise RuntimeError("MuScriptor no generó un archivo MIDI")
         return Transcription(read_piano_notes(produced))
+
+
+def explain_failure(label: str, output: str) -> str:
+    text = " ".join(output.split()).lower()  # the CLI wraps its messages to the console width
+    if "accept the model license" in text:
+        return (f"Falta acceso a MuScriptor {label}: acepta su licencia en "
+                f"https://huggingface.co/{_repo(label.lower())} e inicia sesión en Hugging Face.")
+    if any(error in text for error in MEMORY_ERRORS):
+        return (f"No se pudo cargar MuScriptor {label}, probablemente por falta de memoria. "
+                f"Cierra otros programas o usa un modelo más pequeño. Detalle: {output.splitlines()[-1].strip()}")
+    return f"MuScriptor falló: {output}"
+
+
+def _repo(model: str) -> str:
+    return f"MuScriptor/muscriptor-{model}"
+
+
+def _incomplete_files(model: str) -> list[Path]:
+    from huggingface_hub.constants import HF_HUB_CACHE
+
+    blobs = Path(HF_HUB_CACHE) / f"models--{_repo(model).replace('/', '--')}" / "blobs"
+    return list(blobs.glob("*.incomplete"))
+
+
+def _size_on_disk(path: Path) -> int:
+    # While a file is being written, Windows reports a stale size unless the file is opened.
+    try:
+        with path.open("rb") as file:
+            return file.seek(0, os.SEEK_END)
+    except OSError:
+        return 0
+
+
+def _model_size(model: str) -> int | None:
+    from huggingface_hub import HfApi
+
+    try:
+        siblings = HfApi().model_info(_repo(model), files_metadata=True).siblings or []
+    except Exception:  # only used to show a percentage
+        return None
+    return next((s.size for s in siblings if s.rfilename == "model.safetensors"), None)
+
+
+def _watch_download(model: str, label: str, report: Report, finished: threading.Event, known: set[Path]) -> None:
+    """The CLI downloads the model without telling us, so we follow the file it writes to."""
+    meter = None
+    while not finished.wait(UPDATE_SECONDS):
+        files = [path for path in _incomplete_files(model) if path not in known]
+        if files:
+            meter = meter or DownloadMeter(label, _model_size(model), report)
+            meter.update(max(_size_on_disk(path) for path in files))
+        elif meter:
+            meter = None
+            report("transcribing", 25, f"Cargando modelo {label}")
 
 
 def read_piano_notes(path: Path) -> list[Note]:

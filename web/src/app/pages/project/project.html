@@ -141,6 +141,9 @@
                 <span class="ml-auto tabular-nums text-sm text-surface-300">{{ p.progress }}%</span>
               </div>
               <p-progressbar [value]="p.progress" [showValue]="false" styleClass="h-1.5" />
+              @if (p.status !== 'Downloading' && stepMinutes() >= 1) {
+                <p class="text-sm text-surface-100 m-0"><i class="pi pi-clock text-xs mr-1"></i>Lleva {{ stepMinutes() }} min en este paso. Este paso no informa su avance y puede tardar bastante.</p>
+              }
               <p class="text-sm text-surface-300 m-0">La primera transcripción descarga los modelos de IA y puede tardar varios minutos. Esta página se actualiza sola.</p>
             </div>
             <div aria-hidden="true" class="k-keys h-10"></div>

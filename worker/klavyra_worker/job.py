@@ -1,12 +1,14 @@
 """One transcription job: source -> audio -> notes -> hands -> score/MIDI/JSON/PDF, yielding progress."""
 
+import queue
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
 from .engines import get_engine
-from .models import ProgressEvent
+from .engines.base import Report
+from .models import ProgressEvent, Transcription
 from .pipeline import fetch, notation, pdf
 from .pipeline.beats import track_beats
 from .pipeline.hands import split_hands
@@ -42,8 +44,9 @@ def run_job(req: JobRequest) -> Iterator[ProgressEvent]:
             wav, _ = fetch.normalize(source, out, req.max_seconds)
             duration = _duration(wav)
 
-            yield ProgressEvent("transcribing", 25, f"Transcribiendo notas ({req.engine})")
-            transcription = get_engine(req.engine, model=req.model).transcribe(wav, out)
+            engine = get_engine(req.engine, model=req.model)
+            yield ProgressEvent("transcribing", 25, f"Preparando {req.engine}")
+            transcription = yield from _reporting(lambda report: engine.transcribe(wav, out, report))
             if not transcription.notes:
                 raise RuntimeError("No se detectaron notas de piano en el audio")
 
@@ -65,6 +68,28 @@ def run_job(req: JobRequest) -> Iterator[ProgressEvent]:
         yield ProgressEvent("done", 100, f"{len(notes)} notas", files=files)
     except Exception as exc:  # reported to the API, which marks the project as failed
         yield ProgressEvent("failed", 100, error=f"{type(exc).__name__}: {exc}")
+
+
+def _reporting(work: Callable[[Report], Transcription]) -> Generator[ProgressEvent, None, Transcription]:
+    """Runs blocking work in a thread and yields what it reports while it runs."""
+    events: queue.SimpleQueue[ProgressEvent | None] = queue.SimpleQueue()
+    outcome: list[Transcription] = []
+    failure: list[Exception] = []
+
+    def run() -> None:
+        try:
+            outcome.append(work(lambda stage, progress, message: events.put(ProgressEvent(stage, progress, message))))
+        except Exception as exc:
+            failure.append(exc)
+        finally:
+            events.put(None)
+
+    threading.Thread(target=run, daemon=True).start()
+    while (event := events.get()) is not None:
+        yield event
+    if failure:
+        raise failure[0]
+    return outcome[0]
 
 
 def _duration(wav: Path) -> float:
