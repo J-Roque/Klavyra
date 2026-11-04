@@ -106,7 +106,8 @@ cd web && npx ng test --watch=false
 
 ## Licencias
 
-- Código de Klavyra: MIT.
+- Código de Klavyra: **GNU AGPL-3.0** (ver [LICENSE](LICENSE)). Puedes usarlo, modificarlo y compartirlo gratis; si
+  distribuyes una versión modificada, o la ofreces como servicio web, debes publicar su código con la misma licencia.
 - ByteDance piano transcription: Apache-2.0. Beat This!: MIT. music21: BSD. OpenSheetMusicDisplay: BSD.
 - **PrimeNG 21.1.10, `@primeuix/themes` 2.0.3 y PrimeIcons 7.0.0**: MIT. Están fijadas a propósito en `web/package.json`:
   PrimeNG 22, themes 3 y PrimeIcons 8 usan la *PrimeUI License*, que exige una clave. No las actualices sin revisar esto.
