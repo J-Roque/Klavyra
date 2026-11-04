@@ -1,12 +1,16 @@
 from pathlib import Path
 
 import mido
+import pytest
 
-from klavyra_worker.engines.muscriptor_engine import read_piano_notes
+from klavyra_worker.engines.download import DownloadMeter, download_message
+from klavyra_worker.engines.muscriptor_engine import explain_failure, read_piano_notes
+from klavyra_worker.job import _reporting
 from klavyra_worker.models import BeatGrid, Note, Transcription
 from klavyra_worker.pipeline import notation
 from klavyra_worker.pipeline.hands import split_hands
 
+GB = 1024 ** 3
 BEAT = 0.5  # 120 BPM
 GRID = BeatGrid(beats=[i * BEAT for i in range(64)], downbeats=[i * BEAT for i in range(0, 64, 4)])
 
@@ -112,6 +116,55 @@ def test_note_outside_the_key_gets_its_accidental(tmp_path: Path):
     xml = tmp_path / "score.musicxml"
     score.write("musicxml", fp=str(xml))
     assert "<accidental>natural</accidental>" in xml.read_text(encoding="utf-8")
+
+
+def test_download_message_shows_amount_speed_and_time_left():
+    percent, message = download_message("Large", 2 * GB, 4 * GB, 10 * 1024 ** 2)
+    assert percent == 50
+    assert message == "Descargando modelo Large: 2.00 de 4.00 GB · 10.0 MB/s · faltan unos 3 min"
+    assert download_message("Large", GB, None, 0) == (0, "Descargando modelo Large: 1.00 GB")
+
+
+def test_download_meter_limits_updates_and_warns_when_stalled():
+    now = [0.0]
+    events = []
+    meter = DownloadMeter("Large", 4 * GB, lambda *event: events.append(event), clock=lambda: now[0])
+    meter.update(GB)  # too soon after the start
+    assert events == []
+    now[0] = 2.0
+    meter.update(GB)
+    assert "512.0 MB/s" in events[-1][2]
+    now[0] = 122.0
+    meter.update(GB)
+    assert events[-1][0] == "downloading"
+    assert "sin avance desde hace 2 min" in events[-1][2]
+
+
+def test_muscriptor_failures_are_explained():
+    wrapped = "RuntimeError: Attempted to access the data pointer on an invalid python \nstorage."
+    assert "falta de memoria" in explain_failure("Large", wrapped)
+    paging = "OSError: El archivo de paginación es demasiado pequeño para completar la operación. (os error 1455)"
+    assert "falta de memoria" in explain_failure("Large", paging)
+    assert "muscriptor-large" in explain_failure("Large", "1. Accept the model license at https://huggingface.co")
+    assert explain_failure("Small", "otro error") == "MuScriptor falló: otro error"
+
+
+def test_reporting_yields_progress_and_returns_or_raises():
+    def work(report):
+        report("downloading", 50, "Descargando")
+        return Transcription([])
+
+    runner = _reporting(work)
+    assert next(runner).message == "Descargando"
+    with pytest.raises(StopIteration) as stop:
+        next(runner)
+    assert stop.value.value.notes == []
+
+    def broken(_):
+        raise ValueError("sin memoria")
+
+    with pytest.raises(ValueError, match="sin memoria"):
+        list(_reporting(broken))
 
 
 def test_read_piano_notes_honours_tempo_map_and_skips_drums(tmp_path: Path):
