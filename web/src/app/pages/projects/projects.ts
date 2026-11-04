@@ -36,6 +36,26 @@ export class Projects {
     return q ? this.store.projects().filter((p) => p.title.toLowerCase().includes(q)) : this.store.projects();
   });
 
+  protected removeFailed(): void {
+    const failed = this.store.failedProjects();
+    this.confirm.confirm({
+      header: 'Eliminar transcripciones fallidas',
+      message:
+        failed.length === 1
+          ? `¿Eliminar «${failed[0].title}» y sus archivos?`
+          : `¿Eliminar las ${failed.length} transcripciones que fallaron y sus archivos?`,
+      icon: 'pi pi-trash',
+      acceptLabel: 'Eliminar',
+      rejectLabel: 'Cancelar',
+      acceptButtonProps: { severity: 'danger' },
+      rejectButtonProps: { severity: 'secondary', outlined: true },
+      accept: () =>
+        this.store.deleteMany(failed.map((p) => p.id)).subscribe((failures) => {
+          if (failures) this.messages.add({ severity: 'error', summary: `No se pudieron eliminar ${failures}` });
+        }),
+    });
+  }
+
   protected remove(project: Project): void {
     this.confirm.confirm({
       header: 'Eliminar transcripción',

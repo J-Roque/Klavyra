@@ -1,6 +1,9 @@
 <section class="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col gap-6">
   <div class="flex flex-wrap items-end gap-3">
     <h1 class="k-display text-4xl font-normal m-0 mr-auto">Mi repertorio</h1>
+    @if (store.failedProjects().length; as count) {
+      <p-button [label]="'Eliminar fallidas (' + count + ')'" icon="pi pi-trash" severity="danger" [outlined]="true" (onClick)="removeFailed()" />
+    }
     <p-iconfield>
       <p-inputicon styleClass="pi pi-search" />
       <input pInputText placeholder="Buscar" aria-label="Buscar" [ngModel]="search()" (ngModelChange)="search.set($event)" />
