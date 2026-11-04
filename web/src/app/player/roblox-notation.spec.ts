@@ -1,5 +1,5 @@
 import { PlayedNote, PlayerData } from '../core/models';
-import { buildRobloxSheet, keyboardRange, keyFor, RobloxOptions, suggestTranspose } from './roblox-notation';
+import { buildRobloxSheet, keyboardRange, keyFor, RobloxOptions, scriptEntry, scriptSong, suggestTranspose } from './roblox-notation';
 
 // One beat per half second, so a quarter note lasts 0.5 s and bars have 4 beats.
 function song(notes: Partial<PlayedNote>[]): PlayerData {
@@ -54,6 +54,38 @@ describe('roblox notation', () => {
     const sheet = buildRobloxSheet(data, { ...OPTIONS, hand: 'R' });
     expect(sheet.text).toBe('- - - - | y - - - |');
     expect(sheet.bars[1].time).toBe(2);
+  });
+
+  it('times the script from each bar and marks tempo changes', () => {
+    // Four beats of 0.5 s, then the beats slow down to 0.6 s.
+    const beats = [0, 0.5, 1, 1.5, 2, 2.6, 3.2, 3.8, 4.4, 5, 5.6, 6.2, 6.8];
+    const data = { ...song([{ t: 0, p: 60 }, { t: 2, p: 62 }, { t: 4.4, p: 64 }]), beats };
+    const result = scriptSong(buildRobloxSheet(data, OPTIONS), 120, 1);
+    expect(result.tempo).toBe(0.5);
+    expect(result.duracion).toBe(0.08);
+    expect(result.changes).toBe(1);
+    expect(result.notas).toBe('t - - -  {0.6} y - - -  u - - -');
+    expect(result.notas).not.toContain('|'); // the script reads | as a two-step rest
+  });
+
+  it('uses the average tempo when there is only one bar', () => {
+    const result = scriptSong(buildRobloxSheet(song([{ p: 60 }]), { ...OPTIONS, step: 0.5 }), 117.6, 0.5);
+    expect(result).toEqual({ tempo: 0.255, duracion: 0.08, notas: 't - - - - - - -', changes: 0 });
+  });
+
+  it('writes a dictionary entry ready to paste', () => {
+    expect(scriptEntry('Mi "canción"', { tempo: 0.255, duracion: 0.08, notas: 't y\nu -', changes: 0 })).toBe(
+      [
+        '"Mi \\"canción\\"": {',
+        '        "tempo": 0.255,',
+        '        "duracion": 0.08,',
+        '        "notas": """',
+        '            t y',
+        '            u -',
+        '        """,',
+        '    },',
+      ].join('\n'),
+    );
   });
 
   it('suggests the shift with no sharps', () => {
