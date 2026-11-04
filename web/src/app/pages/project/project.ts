@@ -2,10 +2,10 @@ import { Component, computed, effect, inject, input, OnDestroy, signal, untracke
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Title } from '@angular/platform-browser';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { Button } from 'primeng/button';
-import { MenuItem, MessageService } from 'primeng/api';
+import { ConfirmationService, MenuItem, MessageService } from 'primeng/api';
 import { InputNumber } from 'primeng/inputnumber';
 import { Menu } from 'primeng/menu';
 import { Popover } from 'primeng/popover';
@@ -18,6 +18,7 @@ import { Tooltip } from 'primeng/tooltip';
 import { ENGINE_LABEL, FileKind, Project, STATUS_LABEL } from '../../core/models';
 import { ProgressHub } from '../../core/progress-hub';
 import { ProjectsApi } from '../../core/projects-api';
+import { ProjectsStore } from '../../core/projects-store';
 import { statusSeverity } from '../../core/status';
 import { FallingNotes } from '../../player/falling-notes';
 import { HandFilter, PlayerController } from '../../player/player-controller';
@@ -38,6 +39,9 @@ export class ProjectPage implements OnDestroy {
   private readonly api = inject(ProjectsApi);
   private readonly messages = inject(MessageService);
   private readonly pageTitle = inject(Title);
+  private readonly store = inject(ProjectsStore);
+  private readonly confirm = inject(ConfirmationService);
+  private readonly router = inject(Router);
   protected readonly statusLabel = STATUS_LABEL;
   protected readonly engineLabel = ENGINE_LABEL;
   protected readonly severity = statusSeverity;
@@ -120,6 +124,25 @@ export class ProjectPage implements OnDestroy {
   protected openView(view: 'keys' | 'score' | 'roblox'): void {
     this.tab.set(view);
     if (view === 'score') this.scoreOpened.set(true);
+  }
+
+  protected remove(): void {
+    const p = this.project();
+    if (!p) return;
+    this.confirm.confirm({
+      header: 'Eliminar transcripción',
+      message: `¿Eliminar «${p.title}» y sus archivos?`,
+      icon: 'pi pi-trash',
+      acceptLabel: 'Eliminar',
+      rejectLabel: 'Cancelar',
+      acceptButtonProps: { severity: 'danger' },
+      rejectButtonProps: { severity: 'secondary', outlined: true },
+      accept: () =>
+        this.store.delete(p.id).subscribe({
+          next: () => void this.router.navigate(['/projects']),
+          error: () => this.messages.add({ severity: 'error', summary: 'No se pudo eliminar' }),
+        }),
+    });
   }
 
   protected retry(): void {
