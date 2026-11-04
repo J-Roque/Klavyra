@@ -8,7 +8,7 @@ import { SelectButton } from 'primeng/selectbutton';
 import { Tooltip } from 'primeng/tooltip';
 import { PlayerData } from '../core/models';
 import { HandFilter } from './player-controller';
-import { buildRobloxSheet, MIDDLE_C_KEYS, MiddleCKey, scriptEntry, scriptSong, suggestTranspose } from './roblox-notation';
+import { buildExactSong, buildRobloxSheet, MIDDLE_C_KEYS, MiddleCKey, scriptEntry, scriptSong, suggestTranspose } from './roblox-notation';
 import { scoreQuarterAt } from './timing';
 
 const MIDDLE_C_STORAGE = 'klavyra.robloxMiddleC';
@@ -61,7 +61,17 @@ const MIDDLE_C_STORAGE = 'klavyra.robloxMiddleC';
           <i class="pi pi-info-circle text-xs mr-1"></i>{{ script().changes }} cambios de tempo
         </span>
       }
-      <p-button class="ml-auto" label="Copiar para script" icon="pi pi-code" size="small" severity="secondary" [outlined]="true" (onClick)="copyEntry()" />
+      <div class="flex flex-wrap gap-1 ml-auto">
+        <p-button label="Copiar para script" icon="pi pi-code" size="small" severity="secondary" [outlined]="true" (onClick)="copyEntry()" />
+        <p-button
+          label="Descargar exacta (.json)"
+          icon="pi pi-download"
+          size="small"
+          (onClick)="downloadExact()"
+          pTooltip="Cada nota en su segundo real, como suena en Klavyra. Guárdalo en la carpeta «canciones» junto a tu script."
+          tooltipPosition="top"
+        />
+      </div>
     </div>
 
     @if (sheet().outOfRange > 0) {
@@ -124,6 +134,13 @@ export class RobloxSheet {
       middleC: this.middleC(),
     }),
   );
+  protected readonly exact = computed(() =>
+    buildExactSong(
+      this.data(),
+      { hand: this.hand(), step: this.step(), maxChord: this.maxChord(), transpose: this.transpose(), middleC: this.middleC() },
+      this.title(),
+    ),
+  );
   protected readonly script = computed(() => scriptSong(this.sheet(), this.data().bpm, this.step()));
   protected readonly currentIndex = computed(() => Math.floor(scoreQuarterAt(this.data(), this.time()) / this.step() + 0.001));
 
@@ -167,13 +184,21 @@ export class RobloxSheet {
   }
 
   protected download(): void {
-    const url = URL.createObjectURL(new Blob([this.sheet().text], { type: 'text/plain;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${this.title()} - Roblox.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+    saveFile(`${this.title()} - Roblox.txt`, this.sheet().text, 'text/plain;charset=utf-8');
   }
+
+  protected downloadExact(): void {
+    saveFile(`${this.title()}.json`, JSON.stringify(this.exact().song), 'application/json');
+  }
+}
+
+function saveFile(name: string, content: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function copyWithSelection(text: string): boolean {

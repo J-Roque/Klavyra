@@ -1,5 +1,5 @@
 import { PlayedNote, PlayerData } from '../core/models';
-import { buildRobloxSheet, keyboardRange, keyFor, RobloxOptions, scriptEntry, scriptSong, suggestTranspose } from './roblox-notation';
+import { buildExactSong, buildRobloxSheet, keyboardRange, keyFor, RobloxOptions, scriptEntry, scriptSong, suggestTranspose } from './roblox-notation';
 
 // One beat per half second, so a quarter note lasts 0.5 s and bars have 4 beats.
 function song(notes: Partial<PlayedNote>[]): PlayerData {
@@ -71,6 +71,33 @@ describe('roblox notation', () => {
   it('uses the average tempo when there is only one bar', () => {
     const result = scriptSong(buildRobloxSheet(song([{ p: 60 }]), { ...OPTIONS, step: 0.5 }), 117.6, 0.5);
     expect(result).toEqual({ tempo: 0.255, duracion: 0.08, notas: 't - - - - - - -', changes: 0 });
+  });
+
+  it('keeps the real times for the exact song', () => {
+    const data = song([
+      { t: 0.137, d: 1.2, p: 60, h: 'R' },
+      { t: 0.5, d: 0.25, p: 61, h: 'R' },
+      { t: 0.51, d: 0.4, p: 24, h: 'L' }, // below the keyboard: moves up to C2 = '1'
+    ]);
+    const { song: exact, outOfRange } = buildExactSong(data, OPTIONS, 'Prueba');
+    expect(exact.formato).toBe('klavyra-roblox-1');
+    expect(exact.notas).toEqual([
+      [0.137, 1.2, 't'],
+      [0.5, 0.25, 'T'],
+      [0.51, 0.4, '1'],
+    ]);
+    expect(outOfRange).toBe(1);
+    expect(buildExactSong(data, { ...OPTIONS, hand: 'L', transpose: 1 }, 'x').song.notas).toEqual([[0.51, 0.4, '!']]);
+  });
+
+  it('releases a key before it is pressed again and limits chords', () => {
+    const repeated = song([{ t: 0, d: 1, p: 60 }, { t: 0.5, d: 1, p: 60 }]);
+    expect(buildExactSong(repeated, OPTIONS, 'x').song.notas).toEqual([
+      [0, 0.48, 't'],
+      [0.5, 1, 't'],
+    ]);
+    const chord = song([60, 64, 67, 72].map((p, i) => ({ t: i * 0.005, d: 1, p })));
+    expect(buildExactSong(chord, { ...OPTIONS, maxChord: 2 }, 'x').song.notas.map((n) => n[2])).toEqual(['t', 's']);
   });
 
   it('writes a dictionary entry ready to paste', () => {
