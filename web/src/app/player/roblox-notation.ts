@@ -150,6 +150,77 @@ export function scriptSong(sheet: RobloxSheet, bpm: number, step: number): Scrip
   return { tempo, duracion: round3(Math.min(DEFAULT_HOLD, shortest / 2)), notas: lines.join('\n'), changes };
 }
 
+/** Every note at its real time, for the script to play like Klavyra's player: [start s, length s, key]. */
+export interface ExactSong {
+  formato: 'klavyra-roblox-1';
+  titulo: string;
+  teclaDoCentral: MiddleCKey;
+  transponer: number;
+  notas: [number, number, string][];
+}
+
+const SAME_ONSET = 0.02; // seconds: notes this close together are one chord
+const RELEASE_GAP = 0.02; // a key has to be released before it can be pressed again
+const MIN_LENGTH = 0.01;
+
+export function buildExactSong(data: PlayerData, options: RobloxOptions, title: string): { song: ExactSong; outOfRange: number } {
+  const { low, high } = keyboardRange(options.middleC);
+  let outOfRange = 0;
+  const played = data.notes
+    .filter((n) => options.hand === 'both' || n.h === options.hand)
+    .map((n) => {
+      const pitch = n.p + options.transpose;
+      const folded = fold(pitch, low, high);
+      if (folded !== pitch) outOfRange++;
+      return { start: n.t, end: n.t + n.d, pitch: folded };
+    })
+    .sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+
+  // Same chord limit as the step view, applied to notes that start together.
+  const kept: typeof played = [];
+  for (let i = 0; i < played.length; ) {
+    let j = i;
+    while (j < played.length && played[j].start - played[i].start <= SAME_ONSET) j++;
+    const byPitch = new Map<number, (typeof played)[number]>();
+    for (const n of played.slice(i, j)) {
+      const other = byPitch.get(n.pitch);
+      if (!other || n.end > other.end) byPitch.set(n.pitch, n);
+    }
+    const chosen = new Set(limitChord([...byPitch.keys()].sort((a, b) => a - b), options.maxChord));
+    kept.push(...[...byPitch.values()].filter((n) => chosen.has(n.pitch)));
+    i = j;
+  }
+
+  // One key cannot sound twice at once: cut a note just before the same key is pressed again.
+  const byKey = new Map<string, { start: number; end: number; key: string }[]>();
+  for (const n of kept) {
+    const key = keyFor(n.pitch, options.middleC);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push({ start: n.start, end: n.end, key });
+  }
+  const notes: { start: number; end: number; key: string }[] = [];
+  for (const list of byKey.values()) {
+    list.sort((a, b) => a.start - b.start);
+    list.forEach((n, i) => {
+      const next = list[i + 1];
+      const end = next && next.start - RELEASE_GAP < n.end ? next.start - RELEASE_GAP : n.end;
+      notes.push({ ...n, end: Math.max(end, n.start + MIN_LENGTH) });
+    });
+  }
+  notes.sort((a, b) => a.start - b.start || a.key.localeCompare(b.key));
+
+  return {
+    outOfRange,
+    song: {
+      formato: 'klavyra-roblox-1',
+      titulo: title,
+      teclaDoCentral: options.middleC,
+      transponer: options.transpose,
+      notas: notes.map((n) => [round3(n.start), round3(n.end - n.start), n.key]),
+    },
+  };
+}
+
 /** One entry of the script's song dictionary, ready to paste. */
 export function scriptEntry(title: string, song: ScriptSong): string {
   const name = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
