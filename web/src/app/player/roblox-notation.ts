@@ -109,6 +109,66 @@ export function buildRobloxSheet(data: PlayerData, options: RobloxOptions): Robl
   return { bars, outOfRange, text: lines.join('\n') };
 }
 
+/**
+ * A song for Johel's auto-piano script: each token lasts `tempo` seconds (holding the keys `duracion` of them),
+ * `-` is one silent step, `|` is two, and `{0.25}` changes the tempo from there on.
+ */
+export interface ScriptSong {
+  tempo: number;
+  duracion: number;
+  notas: string;
+  /** Tempo marks added where the piece speeds up or slows down. */
+  changes: number;
+}
+
+const DEFAULT_HOLD = 0.08;
+const TEMPO_TOLERANCE = 0.03;
+
+export function scriptSong(sheet: RobloxSheet, bpm: number, step: number): ScriptSong {
+  // Each bar's real length, so the script follows the recording instead of one average tempo.
+  const barTempo = sheet.bars.map((bar, i) => {
+    const next = sheet.bars[i + 1];
+    return next && bar.tokens.length ? (next.time - bar.time) / bar.tokens.length : null;
+  });
+  const average = (60 / (bpm > 0 ? bpm : 120)) * step;
+  const tempo = round3(barTempo.find((t) => t !== null && t > 0) ?? average);
+
+  let current = tempo;
+  let changes = 0;
+  const bars = sheet.bars.map((bar, i) => {
+    const tokens = bar.tokens.map((t) => t.text).join(' ');
+    const wanted = barTempo[i];
+    if (wanted === null || wanted <= 0 || Math.abs(wanted - current) / current <= TEMPO_TOLERANCE) return tokens;
+    current = round3(wanted);
+    changes++;
+    return `{${current}} ${tokens}`;
+  });
+
+  const lines: string[] = [];
+  for (let i = 0; i < bars.length; i += 4) lines.push(bars.slice(i, i + 4).join('  '));
+  const shortest = Math.min(tempo, ...barTempo.filter((t): t is number => t !== null && t > 0));
+  return { tempo, duracion: round3(Math.min(DEFAULT_HOLD, shortest / 2)), notas: lines.join('\n'), changes };
+}
+
+/** One entry of the script's song dictionary, ready to paste. */
+export function scriptEntry(title: string, song: ScriptSong): string {
+  const name = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const notes = song.notas.split('\n').map((line) => `            ${line}`).join('\n');
+  return [
+    `"${name}": {`,
+    `        "tempo": ${song.tempo},`,
+    `        "duracion": ${song.duracion},`,
+    `        "notas": """`,
+    notes,
+    `        """,`,
+    `    },`,
+  ].join('\n');
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
 /** The transposition with the fewest notes off the keyboard, then the fewest sharps, then the smallest shift. */
 export function suggestTranspose(data: PlayerData, hand: HandFilter, middleC: MiddleCKey): number {
   const { low, high } = keyboardRange(middleC);

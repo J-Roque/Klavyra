@@ -5,9 +5,10 @@ import { Button } from 'primeng/button';
 import { InputNumber } from 'primeng/inputnumber';
 import { Select } from 'primeng/select';
 import { SelectButton } from 'primeng/selectbutton';
+import { Tooltip } from 'primeng/tooltip';
 import { PlayerData } from '../core/models';
 import { HandFilter } from './player-controller';
-import { buildRobloxSheet, MIDDLE_C_KEYS, MiddleCKey, suggestTranspose } from './roblox-notation';
+import { buildRobloxSheet, MIDDLE_C_KEYS, MiddleCKey, scriptEntry, scriptSong, suggestTranspose } from './roblox-notation';
 import { scoreQuarterAt } from './timing';
 
 const MIDDLE_C_STORAGE = 'klavyra.robloxMiddleC';
@@ -15,7 +16,7 @@ const MIDDLE_C_STORAGE = 'klavyra.robloxMiddleC';
 /** The piece as Roblox / Virtual Piano keys, following the playing position. */
 @Component({
   selector: 'app-roblox-sheet',
-  imports: [FormsModule, Button, InputNumber, Select, SelectButton],
+  imports: [FormsModule, Button, InputNumber, Select, SelectButton, Tooltip],
   host: { class: 'flex flex-col h-full min-h-0' },
   template: `
     <div class="md:hidden flex gap-1 px-3 pt-3 shrink-0">
@@ -50,6 +51,17 @@ const MIDDLE_C_STORAGE = 'klavyra.robloxMiddleC';
         <p-button class="hidden md:inline-flex" label="Copiar" icon="pi pi-copy" size="small" (onClick)="copy()" />
         <p-button icon="pi pi-download" size="small" severity="secondary" [outlined]="true" ariaLabel="Descargar texto" (onClick)="download()" />
       </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 sm:px-4 py-2 border-b border-surface-200 bg-surface-50 shrink-0">
+      <span class="k-eyebrow text-muted-color">Para tu script</span>
+      <span class="font-mono text-sm">"tempo": <strong>{{ script().tempo }}</strong>, "duracion": <strong>{{ script().duracion }}</strong></span>
+      @if (script().changes) {
+        <span class="text-xs text-muted-color" pTooltip="Marcas {segundos} donde la canción acelera o frena, para que no se desfase" tooltipPosition="top">
+          <i class="pi pi-info-circle text-xs mr-1"></i>{{ script().changes }} cambios de tempo
+        </span>
+      }
+      <p-button class="ml-auto" label="Copiar para script" icon="pi pi-code" size="small" severity="secondary" [outlined]="true" (onClick)="copyEntry()" />
     </div>
 
     @if (sheet().outOfRange > 0) {
@@ -112,6 +124,7 @@ export class RobloxSheet {
       middleC: this.middleC(),
     }),
   );
+  protected readonly script = computed(() => scriptSong(this.sheet(), this.data().bpm, this.step()));
   protected readonly currentIndex = computed(() => Math.floor(scoreQuarterAt(this.data(), this.time()) / this.step() + 0.001));
 
   constructor() {
@@ -127,15 +140,18 @@ export class RobloxSheet {
 
   protected setMiddleC(key: MiddleCKey): void {
     this.middleC.set(key);
-    try {
-      localStorage.setItem(MIDDLE_C_STORAGE, key);
-    } catch {
-      // Only a convenience: the choice just won't be remembered.
-    }
+    save(MIDDLE_C_STORAGE, key);
   }
 
-  protected async copy(): Promise<void> {
-    const text = this.sheet().text;
+  protected copy(): Promise<void> {
+    return this.copyText(this.sheet().text, 'Las teclas están en el portapapeles.');
+  }
+
+  protected copyEntry(): Promise<void> {
+    return this.copyText(scriptEntry(this.title(), this.script()), 'Pégalo dentro del diccionario de canciones de tu script.');
+  }
+
+  private async copyText(text: string, detail: string): Promise<void> {
     let copied = false;
     try {
       await navigator.clipboard.writeText(text);
@@ -145,7 +161,7 @@ export class RobloxSheet {
     }
     this.messages.add(
       copied
-        ? { severity: 'success', summary: 'Copiado', detail: 'Las teclas están en el portapapeles.' }
+        ? { severity: 'success', summary: 'Copiado', detail }
         : { severity: 'warn', summary: 'No se pudo copiar', detail: 'Descarga el texto en su lugar.' },
     );
   }
@@ -173,11 +189,22 @@ function copyWithSelection(text: string): boolean {
 }
 
 function loadMiddleC(): MiddleCKey {
+  const saved = load(MIDDLE_C_STORAGE) as MiddleCKey | null;
+  return saved && MIDDLE_C_KEYS.includes(saved) ? saved : 't';
+}
+
+function load(key: string): string | null {
   try {
-    const saved = localStorage.getItem(MIDDLE_C_STORAGE) as MiddleCKey | null;
-    if (saved && MIDDLE_C_KEYS.includes(saved)) return saved;
+    return localStorage.getItem(key);
   } catch {
-    // Storage can be blocked; fall through to the default.
+    return null; // storage can be blocked; callers fall back to their default
   }
-  return 't';
+}
+
+function save(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Only a convenience: the choice just won't be remembered.
+  }
 }
