@@ -18,7 +18,8 @@ from .base import Report
 from .download import UPDATE_SECONDS, DownloadMeter
 
 PIANO_PROGRAMS = range(0, 8)  # General MIDI acoustic/electric pianos, harpsichord, clavinet
-MEMORY_ERRORS = ("invalid python storage", "out of memory", "not enough memory", "defaultcpuallocator", "paging file")
+MEMORY_ERRORS = ("invalid python storage", "out of memory", "not enough memory", "defaultcpuallocator", "paging file",
+                 "os error 1455", "archivo de paginación")
 
 
 def _cli() -> list[str]:

@@ -50,7 +50,7 @@ export class Home implements OnDestroy {
   protected readonly models = [
     { label: 'Small', value: 'small' as ModelSize },
     { label: 'Medium', value: 'medium' as ModelSize },
-    { label: 'Large (GPU grande)', value: 'large' as ModelSize },
+    { label: 'Large (unos 11 GB de GPU)', value: 'large' as ModelSize },
   ];
 
   protected readonly url = signal('');

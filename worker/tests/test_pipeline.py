@@ -143,6 +143,8 @@ def test_download_meter_limits_updates_and_warns_when_stalled():
 def test_muscriptor_failures_are_explained():
     wrapped = "RuntimeError: Attempted to access the data pointer on an invalid python \nstorage."
     assert "falta de memoria" in explain_failure("Large", wrapped)
+    paging = "OSError: El archivo de paginación es demasiado pequeño para completar la operación. (os error 1455)"
+    assert "falta de memoria" in explain_failure("Large", paging)
     assert "muscriptor-large" in explain_failure("Large", "1. Accept the model license at https://huggingface.co")
     assert explain_failure("Small", "otro error") == "MuScriptor falló: otro error"
 
