@@ -19,8 +19,20 @@ internal sealed class ServiceHost(AppPaths paths) : IDisposable
 
     public Uri? AppUri { get; private set; }
 
+    /// <summary>Whether the worker found an NVIDIA GPU (CUDA); null if it did not say.</summary>
+    public bool? HasGpu { get; private set; }
+
     public async Task StartAsync(IProgress<string> status, CancellationToken ct)
     {
+        // A developer's own environment (KLAVYRA_PYTHON) is used as is.
+        if (paths.PythonOverride is null)
+        {
+            var setup = new PythonSetup(paths);
+            if (!setup.IsReady())
+            {
+                await setup.RunAsync(status, ct);
+            }
+        }
         if (!File.Exists(paths.Python))
         {
             throw new StartupException($"Falta el entorno de Python de Klavyra.\nSe esperaba en: {paths.Python}");
@@ -42,8 +54,24 @@ internal sealed class ServiceHost(AppPaths paths) : IDisposable
 
         await WaitReadyAsync(api, "El servidor de Klavyra", $"{ServiceStarts.Url(apiPort)}/api/projects", ApiStartup, ct);
         status.Report("Preparando el motor de transcripción… (la primera vez tarda más)");
-        await WaitReadyAsync(worker, "El motor de transcripción", $"{ServiceStarts.Url(workerPort)}/health", WorkerStartup, ct);
+        var health = await WaitReadyAsync(worker, "El motor de transcripción", $"{ServiceStarts.Url(workerPort)}/health", WorkerStartup, ct);
+        HasGpu = ReadCuda(health);
         AppUri = new Uri(ServiceStarts.Url(apiPort) + "/");
+    }
+
+    internal static bool? ReadCuda(string health)
+    {
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(health);
+            return json.RootElement.TryGetProperty("cuda", out var cuda) && cuda.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+                ? cuda.GetBoolean()
+                : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
     internal static int FreePort()
@@ -84,7 +112,8 @@ internal sealed class ServiceHost(AppPaths paths) : IDisposable
         return process;
     }
 
-    private async Task WaitReadyAsync(Process process, string label, string url, TimeSpan limit, CancellationToken ct)
+    /// <summary>Waits for a successful answer and returns its body.</summary>
+    private async Task<string> WaitReadyAsync(Process process, string label, string url, TimeSpan limit, CancellationToken ct)
     {
         var deadline = DateTime.UtcNow + limit;
         while (DateTime.UtcNow < deadline)
@@ -98,7 +127,7 @@ internal sealed class ServiceHost(AppPaths paths) : IDisposable
             try
             {
                 using var response = await _http.GetAsync(url, ct);
-                if (response.IsSuccessStatusCode) return;
+                if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync(ct);
             }
             catch (HttpRequestException) { }
             catch (TaskCanceledException) when (!ct.IsCancellationRequested) { }
