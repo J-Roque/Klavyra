@@ -12,6 +12,7 @@ internal sealed class MainForm : Form
     private readonly AppPaths _paths;
     private ServiceHost _host;
     private Uri? _app;
+    private bool _updateChecked;
     private readonly CancellationTokenSource _closing = new();
     private readonly WebView2 _web = new() { Dock = DockStyle.Fill, Visible = false, DefaultBackgroundColor = Background };
     private readonly Panel _splash = new() { Dock = DockStyle.Fill, BackColor = Background };
@@ -81,6 +82,7 @@ internal sealed class MainForm : Form
             _web.Visible = true;
             _splash.Visible = false;
             WarnOnceWithoutGpu();
+            _ = NotifyNewVersionAsync();
         }
         catch (OperationCanceledException) when (_closing.IsCancellationRequested)
         {
@@ -148,6 +150,30 @@ internal sealed class MainForm : Form
             "Klavyra funciona igual con el modelo ByteDance, pero cada transcripción tardará más (unos minutos). " +
             "MuScriptor necesita una GPU NVIDIA.",
             "Klavyra", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    /// <summary>Tells the user once about each new release; any failure (offline, private repository…) is silent.</summary>
+    private async Task NotifyNewVersionAsync()
+    {
+        if (_updateChecked) return;
+        _updateChecked = true;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var release = await UpdateCheck.FindNewerAsync(http, UpdateCheck.Current, _closing.Token);
+            var announced = Path.Combine(_paths.DataDir, "aviso-version.txt");
+            if (release is null || IsDisposed) return;
+            if (File.Exists(announced) && File.ReadAllText(announced).Trim() == release.Tag) return;
+            File.WriteAllText(announced, release.Tag);
+            var answer = MessageBox.Show(this,
+                $"Hay una versión nueva de Klavyra: {release.Version} (tienes la {UpdateCheck.Current}).\n\n" +
+                "¿Abrir la página de descarga? Instálala encima de esta: tus proyectos y modelos se conservan.",
+                "Klavyra", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (answer == DialogResult.Yes) OpenExternal(release.PageUrl);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+        }
     }
 
     private static void OpenExternal(string target)

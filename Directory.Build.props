@@ -1,0 +1,8 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Klavyra's version, shared by the API (Ajustes > Acerca de), the launcher and the installer (desktop\build.ps1). -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>
