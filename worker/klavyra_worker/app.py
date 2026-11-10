@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import settings
+from . import job, settings
 from .engines import ENGINES
 from .job import JobRequest, run_job
 from .pipeline import fetch, pdf
@@ -24,6 +24,11 @@ class TranscribeBody(BaseModel):
     model: str = "small"
     title: str = "Klavyra"
     maxSeconds: int | None = None
+    jobId: str | None = None
+
+
+class CancelBody(BaseModel):
+    jobId: str
 
 
 @app.get("/health")
@@ -38,6 +43,7 @@ def health():
         "musescore": pdf.musescore_exe() is not None,
         "ffmpeg": _has_ffmpeg(),
         "huggingFaceToken": settings.has_token(),
+        "downloader": settings.downloader_version(),
     }
 
 
@@ -78,6 +84,21 @@ def hugging_face_remove():
     settings.remove()
 
 
+@app.post("/settings/downloader/update")
+def downloader_update():
+    if job.is_busy():
+        return JSONResponse({"detail": "Hay una transcripción en curso. Actualiza cuando termine."}, status_code=409)
+    try:
+        return settings.update_downloader()
+    except settings.TokenError as e:
+        return _token_error(e)
+
+
+@app.post("/cancel")
+def cancel(body: CancelBody):
+    return {"running": job.cancel(body.jobId)}
+
+
 @app.post("/transcribe")
 def transcribe(body: TranscribeBody):
     req = JobRequest(
@@ -88,6 +109,7 @@ def transcribe(body: TranscribeBody):
         model=body.model,
         title=body.title,
         max_seconds=body.maxSeconds,
+        job_id=body.jobId,
     )
 
     def events():

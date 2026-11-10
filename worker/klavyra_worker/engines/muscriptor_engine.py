@@ -13,6 +13,7 @@ import threading
 from collections import deque
 from pathlib import Path
 
+from ..errors import JobCancelled
 from ..models import Note, Transcription
 from .base import Report
 from .download import UPDATE_SECONDS, DownloadMeter
@@ -54,6 +55,11 @@ class MuScriptorEngine:
             env={**os.environ, "PYTHONUTF8": "1"},
         )
         watcher.start()
+        ended = threading.Event()
+        cancelled: threading.Event | None = getattr(report, "cancelled", None)
+        if cancelled is not None:
+            # The CLI is a separate program, so a cancelled job can stop it at once, even mid-download.
+            threading.Thread(target=_kill_when_cancelled, args=(process, cancelled, ended), daemon=True).start()
         tail: deque[str] = deque(maxlen=8)
         try:
             for line in process.stdout:
@@ -67,13 +73,25 @@ class MuScriptorEngine:
             process.wait()
         finally:
             finished.set()
+            ended.set()
+            if process.poll() is None:
+                process.kill()
             watcher.join()
+        if cancelled is not None and cancelled.is_set():
+            raise JobCancelled()
         if process.returncode != 0:
             raise RuntimeError(explain_failure(label, "\n".join(tail)))
         produced = midi if midi.exists() else next(iter(sorted(out.rglob("*.mid"))), None)
         if produced is None:
             raise RuntimeError("MuScriptor no generó un archivo MIDI")
         return Transcription(read_piano_notes(produced))
+
+
+def _kill_when_cancelled(process: subprocess.Popen, cancelled: threading.Event, ended: threading.Event) -> None:
+    while not ended.wait(0.5):
+        if cancelled.is_set():
+            process.kill()
+            return
 
 
 def explain_failure(label: str, output: str) -> str:
@@ -120,14 +138,17 @@ def _model_size(model: str) -> int | None:
 def _watch_download(model: str, label: str, report: Report, finished: threading.Event, known: set[Path]) -> None:
     """The CLI downloads the model without telling us, so we follow the file it writes to."""
     meter = None
-    while not finished.wait(UPDATE_SECONDS):
-        files = [path for path in _incomplete_files(model) if path not in known]
-        if files:
-            meter = meter or DownloadMeter(label, _model_size(model), report)
-            meter.update(max(_size_on_disk(path) for path in files))
-        elif meter:
-            meter = None
-            report("transcribing", 25, f"Cargando modelo {label}")
+    try:
+        while not finished.wait(UPDATE_SECONDS):
+            files = [path for path in _incomplete_files(model) if path not in known]
+            if files:
+                meter = meter or DownloadMeter(label, _model_size(model), report)
+                meter.update(max(_size_on_disk(path) for path in files))
+            elif meter:
+                meter = None
+                report("transcribing", 25, f"Cargando modelo {label}")
+    except JobCancelled:
+        pass  # the job was cancelled: nothing left to report
 
 
 def read_piano_notes(path: Path) -> list[Note]:

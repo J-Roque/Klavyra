@@ -242,3 +242,126 @@ def test_hugging_face_token_is_checked_saved_and_removed(tmp_path: Path, monkeyp
     with pytest.raises(settings.TokenError) as missing:
         settings.status(hub)
     assert missing.value.status == 404
+
+
+def test_errors_are_explained_in_plain_words():
+    from yt_dlp.utils import DownloadError
+
+    from klavyra_worker.errors import CANCELLED, JobCancelled, UserError, explain
+
+    assert "privado" in explain(DownloadError("ERROR: [youtube] abc: Private video. Sign in if you've been granted access"))
+    assert "ya no está disponible" in explain(DownloadError("ERROR: [youtube] abc: Video unavailable"))
+    assert "conexión a internet" in explain(DownloadError("ERROR: Unable to download webpage: <urlopen error [Errno 11001] getaddrinfo failed>"))
+    assert "actualiza el descargador" in explain(DownloadError("ERROR: [youtube] abc: nsig extraction failed")).lower()
+    assert "no sabe descargar" in explain(DownloadError("ERROR: Unsupported URL: https://example.com"))
+    assert "Detalle: algo raro" in explain(DownloadError("ERROR: algo raro"))
+    assert "sin memoria" in explain(RuntimeError("CUDA out of memory. Tried to allocate 2 GiB"))
+    assert "No se pudo leer el audio" in explain(RuntimeError("ffmpeg falló: Invalid data found when processing input"))
+    assert explain(RuntimeError("No se detectaron notas de piano en el audio")) == "No se detectaron notas de piano en el audio"
+    assert explain(UserError("demasiado largo")) == "demasiado largo"
+    assert explain(JobCancelled()) == CANCELLED
+    assert explain(KeyError("x")) == "KeyError: 'x'"
+
+
+def test_audio_longer_than_the_limit_is_rejected():
+    from klavyra_worker.errors import UserError
+    from klavyra_worker.pipeline import fetch
+
+    fetch.check_duration(None)
+    fetch.check_duration(fetch.MAX_MINUTES * 60)
+    with pytest.raises(UserError, match="dura 45 minutos"):
+        fetch.check_duration(45 * 60)
+
+
+def test_link_download_message_moves_the_bar_from_5_to_15():
+    from klavyra_worker.pipeline.fetch import download_message
+
+    assert download_message(0, None) == (5, "Descargando audio: 0.0 MB")
+    assert download_message(5 * 1024 ** 2, 10 * 1024 ** 2) == (10, "Descargando audio: 5.0 de 10.0 MB")
+    assert download_message(10 * 1024 ** 2, 10 * 1024 ** 2)[0] == 15
+
+
+def test_a_cancelled_job_stops_at_its_next_report():
+    import threading
+
+    from klavyra_worker.errors import JobCancelled
+
+    cancelled = threading.Event()
+    reached = []
+
+    def work(report):
+        report("downloading", 10, "uno")
+        cancelled.set()
+        report("downloading", 20, "dos")
+        reached.append("after")
+
+    runner = _reporting(work, cancelled)
+    assert next(runner).message == "uno"
+    with pytest.raises(JobCancelled):
+        next(runner)
+    assert reached == []
+
+
+def _fake_download(title: str):
+    def download_url(url, out_dir, report, cancelled, on_title=lambda t: None):
+        on_title(title)
+        report("downloading", 10, "Descargando audio: 1.0 de 2.0 MB")
+        raise RuntimeError("alto aquí")
+
+    return download_url
+
+
+def test_job_reports_the_video_title_and_a_clear_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import job
+    from klavyra_worker.pipeline import fetch
+
+    monkeypatch.setattr(fetch, "download_url", _fake_download("Für Elise"))
+    events = list(job.run_job(job.JobRequest(tmp_path, url="https://example.com/v", job_id="j1")))
+    assert [e.title for e in events[:3]] == [None, "Für Elise", None]
+    assert events[2].message == "Descargando audio: 1.0 de 2.0 MB"
+    assert events[-1].stage == "failed" and events[-1].error == "alto aquí"
+    assert "j1" not in job._running
+
+
+def test_job_cancelled_while_running_ends_as_cancelled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import job
+    from klavyra_worker.errors import CANCELLED
+    from klavyra_worker.pipeline import fetch
+
+    assert job.cancel("unknown") is False  # nothing to stop, and nothing remembered for later
+
+    def download_url(url, out_dir, report, cancelled, on_title=lambda t: None):
+        assert job.cancel("late") is True
+        report("downloading", 10, "no llega")
+
+    monkeypatch.setattr(fetch, "download_url", download_url)
+    events = list(job.run_job(job.JobRequest(tmp_path, url="https://example.com/v", job_id="late")))
+    assert events[-1].error == CANCELLED
+    assert not job.is_busy()
+
+
+def test_downloader_update_runs_uv_against_this_python(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import subprocess
+    import sys
+
+    from klavyra_worker import settings
+
+    uv = tmp_path / "uv.exe"
+    uv.write_bytes(b"")
+    monkeypatch.setenv("KLAVYRA_UV", str(uv))
+    calls = []
+
+    def run(cmd, **_):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    result = settings.update_downloader(run)
+    assert calls == [[str(uv), "pip", "install", "--upgrade", "yt-dlp", "--python", sys.executable]]
+    assert result["before"] == result["after"] == settings.downloader_version() and result["updated"] is False
+
+    def broken(cmd, **_):
+        return subprocess.CompletedProcess(cmd, 1, "", "error: sin red")
+
+    with pytest.raises(settings.TokenError, match="sin red") as failed:
+        settings.update_downloader(broken)
+    assert failed.value.status == 502

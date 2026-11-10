@@ -27,6 +27,9 @@ public static class SettingsEndpoints
             ForwardAsync(worker, HttpMethod.Put, new { token = body.Token }, ct)).WithName("SaveHuggingFaceToken");
         group.MapDelete("/hugging-face", (WorkerClient worker, CancellationToken ct) =>
             ForwardAsync(worker, HttpMethod.Delete, null, ct)).WithName("RemoveHuggingFaceToken");
+        // Installing the newest link downloader takes a while on a slow connection.
+        group.MapPost("/downloader/update", (WorkerClient worker, CancellationToken ct) =>
+            ForwardAsync(worker, HttpMethod.Post, null, ct, "/settings/downloader/update", 180)).WithName("UpdateDownloader");
         return app;
     }
 
@@ -49,11 +52,13 @@ public static class SettingsEndpoints
         return new SettingsDto(Version, false, null);
     }
 
-    private static async Task<IResult> ForwardAsync(WorkerClient worker, HttpMethod method, object? body, CancellationToken ct)
+    private static async Task<IResult> ForwardAsync(
+        WorkerClient worker, HttpMethod method, object? body, CancellationToken ct,
+        string path = "/settings/hugging-face", int timeoutSeconds = 60)
     {
         try
         {
-            using var response = await worker.SendAsync(method, "/settings/hugging-face", body, ct);
+            using var response = await worker.SendAsync(method, path, body, ct, timeoutSeconds);
             var json = await response.Content.ReadAsStringAsync(ct);
             return string.IsNullOrEmpty(json)
                 ? Results.StatusCode((int)response.StatusCode)

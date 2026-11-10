@@ -67,19 +67,29 @@ public sealed class TranscriptionWorker(
         var worker = scope.ServiceProvider.GetRequiredService<WorkerClient>();
         if (await db.Projects.FindAsync([id], ct) is not { IsFinished: false } project)
         {
+            queue.ClearCancel(id); // cancelled while it waited
             return;
         }
 
         var request = new WorkerRequest(
             storage.ProjectDir(id), project.SourceUrl, storage.UploadedSource(id),
-            project.Engine, project.Model, project.Title);
+            project.Engine, project.Model, project.Title, JobId: WorkerClient.JobId(id));
 
+        var cancelSent = false;
         await foreach (var evt in worker.TranscribeAsync(request, ct))
         {
             Apply(project, evt);
+            // Cancelled in the instant between leaving the queue and the worker's first report: stop it now.
+            if (!cancelSent && !project.IsFinished && queue.IsCancelRequested(id))
+            {
+                cancelSent = true;
+                await worker.CancelAsync(id, ct);
+                project.Message = CancelProject.Cancelling;
+            }
             await db.SaveChangesAsync(ct);
             await hub.Clients.All.SendAsync(ProgressHub.ProgressEvent, ProjectDto.From(project), ct);
         }
+        queue.ClearCancel(id);
 
         if (!project.IsFinished)
         {
@@ -88,6 +98,10 @@ public sealed class TranscriptionWorker(
             await hub.Clients.All.SendAsync(ProgressHub.ProgressEvent, ProjectDto.From(project), ct);
         }
     }
+
+    /// <summary>True while the title is the one CreateProject gives a link when the user typed none.</summary>
+    internal static bool HasDefaultTitle(Project project) =>
+        Uri.TryCreate(project.SourceUrl, UriKind.Absolute, out var uri) && project.Title == uri.Host;
 
     internal static void Apply(Project project, WorkerEvent evt)
     {
@@ -103,6 +117,12 @@ public sealed class TranscriptionWorker(
             "failed" => ProjectStatus.Failed,
             _ => project.Status,
         };
+        // A project made from a link is first named after its web site; the worker then learns the video's title.
+        if (!string.IsNullOrWhiteSpace(evt.Title) && HasDefaultTitle(project))
+        {
+            var title = evt.Title.Trim();
+            project.Title = title.Length > 200 ? title[..200] : title;
+        }
         if (evt.Files is not null)
         {
             project.Files = [.. evt.Files.Keys];

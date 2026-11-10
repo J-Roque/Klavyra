@@ -5,6 +5,9 @@ its data folder). It is never written to Klavyra's database, logs or responses.
 """
 
 import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 from .engines.muscriptor_engine import _repo
@@ -86,3 +89,46 @@ def status(api=None) -> dict:
     if token is None:
         raise TokenError("No hay ningún token guardado.", 404)
     return check(token, api)
+
+
+# --- The link downloader (yt-dlp) ---
+# Video sites change often and an old yt-dlp stops working, so it can be updated without reinstalling Klavyra.
+
+DOWNLOADER = "yt-dlp"
+
+
+def downloader_version() -> str | None:
+    import importlib
+    from importlib import metadata
+
+    importlib.invalidate_caches()  # an update just changed the installed files
+    try:
+        return metadata.version(DOWNLOADER)
+    except metadata.PackageNotFoundError:
+        return None
+
+
+def uv_exe() -> str:
+    """The uv the desktop app ships (KLAVYRA_UV), or the developer's own."""
+    exe = os.environ.get("KLAVYRA_UV") or shutil.which("uv")
+    if not exe or not Path(exe).exists():
+        raise TokenError("No se encontró uv, el programa que instala las actualizaciones.", 500)
+    return exe
+
+
+def update_command(uv: str, python: str) -> list[str]:
+    return [uv, "pip", "install", "--upgrade", DOWNLOADER, "--python", python]
+
+
+def update_downloader(run=subprocess.run) -> dict:
+    """Installs the newest yt-dlp into this environment; the next download uses it without a restart."""
+    before = downloader_version()
+    result = run(update_command(uv_exe(), sys.executable), capture_output=True, text=True, encoding="utf-8",
+                 errors="replace", timeout=150)
+    if result.returncode != 0:
+        tail = " ".join((result.stderr or "").strip().splitlines()[-3:])
+        raise TokenError(f"No se pudo actualizar el descargador. Revisa tu conexión a internet. Detalle: {tail}", 502)
+    for name in [name for name in sys.modules if name == "yt_dlp" or name.startswith("yt_dlp.")]:
+        del sys.modules[name]  # the old version stays loaded otherwise
+    after = downloader_version()
+    return {"before": before, "after": after, "updated": before != after}
