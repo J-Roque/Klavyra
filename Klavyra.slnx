@@ -2,9 +2,11 @@
   <Folder Name="/src/">
     <Project Path="src/Klavyra.Api/Klavyra.Api.csproj" />
     <Project Path="src/Klavyra.AppHost/Klavyra.AppHost.csproj" />
+    <Project Path="src/Klavyra.Desktop/Klavyra.Desktop.csproj" />
     <Project Path="src/Klavyra.ServiceDefaults/Klavyra.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Klavyra.Api.Tests/Klavyra.Api.Tests.csproj" />
+    <Project Path="tests/Klavyra.Desktop.Tests/Klavyra.Desktop.Tests.csproj" />
   </Folder>
 </Solution>
