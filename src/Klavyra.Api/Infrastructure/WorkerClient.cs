@@ -14,6 +14,20 @@ public sealed class WorkerClient(HttpClient http)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>A short request (health, settings); the caller reads the status and the JSON body.</summary>
+    public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(60)); // this client has no timeout of its own (transcriptions run for minutes)
+        var message = new HttpRequestMessage(method, path)
+        {
+            Content = body is null ? null : JsonContent.Create(body, options: Json),
+        };
+        var response = await http.SendAsync(message, timeout.Token);
+        await response.Content.LoadIntoBufferAsync(timeout.Token);
+        return response;
+    }
+
     public async IAsyncEnumerable<WorkerEvent> TranscribeAsync(
         WorkerRequest request, [EnumeratorCancellation] CancellationToken ct)
     {

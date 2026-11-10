@@ -107,6 +107,10 @@
       <div class="flex flex-col gap-2">
         <label for="model" class="font-semibold text-sm">Tamaño del modelo</label>
         <p-select inputId="model" appendTo="body" class="w-full" [options]="models" optionLabel="label" optionValue="value" [ngModel]="model()" (ngModelChange)="model.set($event)" />
+        <span class="text-xs text-muted-color">
+          Necesita tu token de Hugging Face.
+          <a routerLink="/settings" class="text-primary font-semibold" (click)="closeDialog()">Configúralo en Ajustes</a>
+        </span>
       </div>
     }
   </div>

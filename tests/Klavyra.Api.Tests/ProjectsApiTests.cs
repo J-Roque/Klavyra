@@ -37,8 +37,28 @@ public sealed class FakeWorker : HttpMessageHandler
     public bool Fail { get; set; }
     public List<JsonElement> Requests { get; } = [];
 
+    /// <summary>Answers /health and /settings/... with these, keyed by "METHOD /path".</summary>
+    public Dictionary<string, (HttpStatusCode Status, string Json)> Replies { get; } = new()
+    {
+        ["GET /health"] = (HttpStatusCode.OK, "{\"status\":\"ok\",\"cuda\":true,\"gpu\":\"RTX de prueba\",\"huggingFaceToken\":false}"),
+    };
+
+    public List<string> SettingsBodies { get; } = [];
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        if (request.RequestUri!.AbsolutePath != "/transcribe")
+        {
+            if (request.Content is not null) SettingsBodies.Add(await request.Content.ReadAsStringAsync(ct));
+            if (!Replies.TryGetValue($"{request.Method} {request.RequestUri.AbsolutePath}", out var reply))
+            {
+                throw new HttpRequestException("worker apagado");
+            }
+            return new HttpResponseMessage(reply.Status)
+            {
+                Content = reply.Json.Length == 0 ? null : new StringContent(reply.Json, Encoding.UTF8, "application/json"),
+            };
+        }
         var body = JsonSerializer.Deserialize<JsonElement>(await request.Content!.ReadAsStringAsync(ct));
         Requests.Add(body);
         var outDir = Directory.CreateDirectory(body.GetProperty("outputDir").GetString()!).FullName;

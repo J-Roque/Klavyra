@@ -5,12 +5,13 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from . import settings
 from .engines import ENGINES
 from .job import JobRequest, run_job
-from .pipeline import pdf
+from .pipeline import fetch, pdf
 
 app = FastAPI(title="Klavyra worker")
 
@@ -35,7 +36,46 @@ def health():
         "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "engines": ENGINES,
         "musescore": pdf.musescore_exe() is not None,
+        "ffmpeg": _has_ffmpeg(),
+        "huggingFaceToken": settings.has_token(),
     }
+
+
+def _has_ffmpeg() -> bool:
+    try:
+        fetch.ffmpeg_exe()
+        return True
+    except RuntimeError:
+        return False
+
+
+class TokenBody(BaseModel):
+    token: str
+
+
+def _token_error(e: settings.TokenError) -> JSONResponse:
+    return JSONResponse({"detail": str(e)}, status_code=e.status)
+
+
+@app.get("/settings/hugging-face")
+def hugging_face_status():
+    try:
+        return settings.status()
+    except settings.TokenError as e:
+        return _token_error(e)
+
+
+@app.put("/settings/hugging-face")
+def hugging_face_save(body: TokenBody):
+    try:
+        return settings.save(body.token)
+    except settings.TokenError as e:
+        return _token_error(e)
+
+
+@app.delete("/settings/hugging-face", status_code=204)
+def hugging_face_remove():
+    settings.remove()
 
 
 @app.post("/transcribe")

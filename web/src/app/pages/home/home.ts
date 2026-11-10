@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { Button } from 'primeng/button';
 import { Dialog } from 'primeng/dialog';
@@ -22,7 +22,7 @@ type PendingSource = { file: File } | { url: string };
 
 @Component({
   selector: 'app-home',
-  imports: [FormsModule, Button, Dialog, FileUpload, IconField, InputIcon, InputText, Select, Tooltip],
+  imports: [FormsModule, RouterLink, Button, Dialog, FileUpload, IconField, InputIcon, InputText, Select, Tooltip],
   templateUrl: './home.html',
 })
 export class Home implements OnDestroy {
