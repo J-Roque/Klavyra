@@ -10,7 +10,6 @@
     <RootNamespace>Klavyra.Desktop</RootNamespace>
     <ApplicationIcon>..\..\web\public\favicon.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

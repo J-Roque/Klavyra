@@ -491,3 +491,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 desktop/out/
+desktop/cache/
