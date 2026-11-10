@@ -1,0 +1,140 @@
+using System.Diagnostics;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+
+namespace Klavyra.Desktop;
+
+/// <summary>Shows "Iniciando…" while the services start, then the Klavyra web app inside the window.</summary>
+internal sealed class MainForm : Form
+{
+    private static readonly Color Background = Color.FromArgb(20, 26, 24);
+
+    private readonly AppPaths _paths;
+    private readonly ServiceHost _host;
+    private readonly CancellationTokenSource _closing = new();
+    private readonly WebView2 _web = new() { Dock = DockStyle.Fill, Visible = false, DefaultBackgroundColor = Background };
+    private readonly Panel _splash = new() { Dock = DockStyle.Fill, BackColor = Background };
+    private readonly Label _status = new()
+    {
+        Dock = DockStyle.Fill,
+        ForeColor = Color.Gainsboro,
+        Font = new Font("Segoe UI", 12f),
+        TextAlign = ContentAlignment.MiddleCenter,
+    };
+    private readonly Button _openLogs = new() { Text = "Abrir carpeta de registros", AutoSize = true, Visible = false };
+
+    public MainForm(AppPaths paths)
+    {
+        _paths = paths;
+        _host = new ServiceHost(paths);
+
+        Text = "Klavyra";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        ClientSize = new Size(1280, 800);
+        MinimumSize = new Size(900, 600);
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Background;
+
+        var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(16) };
+        _openLogs.Click += (_, _) => OpenExternal(_paths.Logs);
+        _openLogs.ForeColor = Color.Black;
+        _openLogs.BackColor = Color.Gainsboro;
+        bottom.Controls.Add(_openLogs);
+        _splash.Controls.Add(_status);
+        _splash.Controls.Add(bottom);
+        Controls.Add(_web);
+        Controls.Add(_splash);
+    }
+
+    protected override async void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        try
+        {
+            await _host.StartAsync(new Progress<string>(text => _status.Text = text), _closing.Token);
+            var environment = await CoreWebView2Environment.CreateAsync(null, _paths.WebView);
+            await _web.EnsureCoreWebView2Async(environment);
+            Configure(_web.CoreWebView2, _host.AppUri!);
+            _web.Source = _host.AppUri;
+            _web.Visible = true;
+            _splash.Visible = false;
+        }
+        catch (OperationCanceledException) when (_closing.IsCancellationRequested)
+        {
+            // The window was closed while starting.
+        }
+        catch (StartupException ex)
+        {
+            ShowError(ex.Message);
+        }
+        catch (WebView2RuntimeNotFoundException)
+        {
+            ShowError("Falta Microsoft Edge WebView2, que Klavyra usa para mostrar su ventana.\n" +
+                      "Descárgalo gratis en https://go.microsoft.com/fwlink/p/?LinkId=2124703 y vuelve a abrir Klavyra.");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Klavyra no pudo arrancar: {ex.Message}");
+        }
+    }
+
+    private void Configure(CoreWebView2 web, Uri app)
+    {
+        web.Settings.IsStatusBarEnabled = false;
+#if !DEBUG
+        web.Settings.AreDevToolsEnabled = false;
+#endif
+        web.DocumentTitleChanged += (_, _) => Text = string.IsNullOrWhiteSpace(web.DocumentTitle) ? "Klavyra" : web.DocumentTitle;
+        // Links to other sites (Hugging Face, help pages…) open in the user's browser, not inside Klavyra.
+        web.NewWindowRequested += (_, e) =>
+        {
+            e.Handled = true;
+            OpenExternal(e.Uri);
+        };
+        web.NavigationStarting += (_, e) =>
+        {
+            if (IsExternal(e.Uri, app))
+            {
+                e.Cancel = true;
+                OpenExternal(e.Uri);
+            }
+        };
+    }
+
+    internal static bool IsExternal(string uri, Uri app) =>
+        Uri.TryCreate(uri, UriKind.Absolute, out var target)
+        && (target.Scheme == Uri.UriSchemeHttp || target.Scheme == Uri.UriSchemeHttps)
+        && !string.Equals(target.GetLeftPart(UriPartial.Authority), app.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase);
+
+    private void ShowError(string message)
+    {
+        _status.Text = message;
+        _status.ForeColor = Color.FromArgb(255, 170, 160);
+        _openLogs.Visible = true;
+    }
+
+    private static void OpenExternal(string target)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })?.Dispose();
+        }
+        catch (System.ComponentModel.Win32Exception) { }
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        _closing.Cancel();
+        _host.Dispose();
+        base.OnFormClosing(e);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _closing.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}
