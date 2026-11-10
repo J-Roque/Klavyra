@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Klavyra.Api.Features.Projects;
+using Klavyra.Api.Features.Settings;
 using Klavyra.Api.Hubs;
 using Klavyra.Api.Infrastructure;
 using Microsoft.AspNetCore.Http.Features;
@@ -62,6 +63,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapDefaultEndpoints();
 app.MapProjects();
+app.MapSettings();
 app.MapHub<ProgressHub>("/hubs/progress");
 
 if (servesWeb)

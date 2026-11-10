@@ -192,3 +192,53 @@ def test_bytedance_checkpoint_follows_the_models_folder(tmp_path: Path, monkeypa
     assert checkpoint_path() == Path.home() / "piano_transcription_inference_data" / CHECKPOINT_NAME
     monkeypatch.setenv("KLAVYRA_MODELS", str(tmp_path))
     assert checkpoint_path() == tmp_path / "bytedance" / CHECKPOINT_NAME
+
+
+def _response(status: int):
+    import httpx
+
+    return httpx.Response(status, request=httpx.Request("GET", "https://huggingface.co/api"))
+
+
+class FakeHub:
+    """Stands in for huggingface_hub.HfApi: one valid token with access to small only."""
+
+    def __init__(self, valid: str = "hf_bueno"):
+        self.valid = valid
+
+    def whoami(self, token=None):
+        from huggingface_hub.errors import HfHubHTTPError
+
+        if token != self.valid:
+            raise HfHubHTTPError("401 Unauthorized", response=_response(401))
+        return {"name": "johel"}
+
+    def auth_check(self, repo_id, token=None):
+        from huggingface_hub.errors import GatedRepoError
+
+        if not repo_id.endswith("small"):
+            raise GatedRepoError("acepta la licencia", response=_response(403))
+
+
+def test_hugging_face_token_is_checked_saved_and_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import settings
+
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setattr(settings, "token_path", lambda: tmp_path / "hf" / "token")
+    hub = FakeHub()
+
+    assert not settings.has_token()
+    with pytest.raises(settings.TokenError) as bad:
+        settings.save("hf_malo", hub)
+    assert bad.value.status == 400 and not settings.has_token()
+
+    result = settings.save("  hf_bueno\n", hub)
+    assert result == {"user": "johel", "access": {"small": True, "medium": False, "large": False}}
+    assert (tmp_path / "hf" / "token").read_text() == "hf_bueno"
+    assert settings.status(hub)["user"] == "johel"
+
+    settings.remove()
+    assert not settings.has_token()
+    with pytest.raises(settings.TokenError) as missing:
+        settings.status(hub)
+    assert missing.value.status == 404
