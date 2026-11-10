@@ -10,7 +10,8 @@ internal sealed class MainForm : Form
     private static readonly Color Background = Color.FromArgb(20, 26, 24);
 
     private readonly AppPaths _paths;
-    private readonly ServiceHost _host;
+    private ServiceHost _host;
+    private Uri? _app;
     private readonly CancellationTokenSource _closing = new();
     private readonly WebView2 _web = new() { Dock = DockStyle.Fill, Visible = false, DefaultBackgroundColor = Background };
     private readonly Panel _splash = new() { Dock = DockStyle.Fill, BackColor = Background };
@@ -22,6 +23,7 @@ internal sealed class MainForm : Form
         TextAlign = ContentAlignment.MiddleCenter,
     };
     private readonly Button _openLogs = new() { Text = "Abrir carpeta de registros", AutoSize = true, Visible = false };
+    private readonly Button _retry = new() { Text = "Reintentar", AutoSize = true, Visible = false };
 
     public MainForm(AppPaths paths)
     {
@@ -37,9 +39,13 @@ internal sealed class MainForm : Form
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(16) };
         _openLogs.Click += (_, _) => OpenExternal(_paths.Logs);
-        _openLogs.ForeColor = Color.Black;
-        _openLogs.BackColor = Color.Gainsboro;
-        bottom.Controls.Add(_openLogs);
+        _retry.Click += async (_, _) => await StartAsync();
+        foreach (var button in new[] { _retry, _openLogs })
+        {
+            button.ForeColor = Color.Black;
+            button.BackColor = Color.Gainsboro;
+            bottom.Controls.Add(button);
+        }
         _splash.Controls.Add(_status);
         _splash.Controls.Add(bottom);
         Controls.Add(_web);
@@ -49,15 +55,32 @@ internal sealed class MainForm : Form
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        await StartAsync();
+    }
+
+    private async Task StartAsync()
+    {
+        _retry.Visible = false;
+        _openLogs.Visible = false;
+        _status.ForeColor = Color.Gainsboro;
+        _status.Text = "Iniciando Klavyra…";
+        // A retry starts from a clean slate: whatever the failed attempt left running is stopped first.
+        _host.Dispose();
+        _host = new ServiceHost(_paths);
         try
         {
             await _host.StartAsync(new Progress<string>(text => _status.Text = text), _closing.Token);
-            var environment = await CoreWebView2Environment.CreateAsync(null, _paths.WebView);
-            await _web.EnsureCoreWebView2Async(environment);
-            Configure(_web.CoreWebView2, _host.AppUri!);
-            _web.Source = _host.AppUri;
+            _app = _host.AppUri!;
+            if (_web.CoreWebView2 is null)
+            {
+                var environment = await CoreWebView2Environment.CreateAsync(null, _paths.WebView);
+                await _web.EnsureCoreWebView2Async(environment);
+                Configure(_web.CoreWebView2!);
+            }
+            _web.Source = _app;
             _web.Visible = true;
             _splash.Visible = false;
+            WarnOnceWithoutGpu();
         }
         catch (OperationCanceledException) when (_closing.IsCancellationRequested)
         {
@@ -78,7 +101,8 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void Configure(CoreWebView2 web, Uri app)
+    /// <summary>Once per window; the handlers read <see cref="_app"/>, whose port changes after a retry.</summary>
+    private void Configure(CoreWebView2 web)
     {
         web.Settings.IsStatusBarEnabled = false;
 #if !DEBUG
@@ -93,7 +117,7 @@ internal sealed class MainForm : Form
         };
         web.NavigationStarting += (_, e) =>
         {
-            if (IsExternal(e.Uri, app))
+            if (_app is not null && IsExternal(e.Uri, _app))
             {
                 e.Cancel = true;
                 OpenExternal(e.Uri);
@@ -111,6 +135,19 @@ internal sealed class MainForm : Form
         _status.Text = message;
         _status.ForeColor = Color.FromArgb(255, 170, 160);
         _openLogs.Visible = true;
+        _retry.Visible = true;
+    }
+
+    private void WarnOnceWithoutGpu()
+    {
+        var shown = Path.Combine(_paths.DataDir, "aviso-sin-gpu.txt");
+        if (_host.HasGpu != false || File.Exists(shown)) return;
+        File.WriteAllText(shown, DateTime.Now.ToString("O"));
+        MessageBox.Show(this,
+            "No se encontró una tarjeta gráfica NVIDIA compatible.\n\n" +
+            "Klavyra funciona igual con el modelo ByteDance, pero cada transcripción tardará más (unos minutos). " +
+            "MuScriptor necesita una GPU NVIDIA.",
+            "Klavyra", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private static void OpenExternal(string target)

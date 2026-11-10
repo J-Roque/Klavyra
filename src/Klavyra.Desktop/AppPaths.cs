@@ -17,6 +17,7 @@ internal sealed record AppPaths(string InstallDir, string DataDir, string? Pytho
     public string ApiExe => Path.Combine(ApiDir, "Klavyra.Api.exe");
     public string WorkerDir => Path.Combine(InstallDir, "worker");
     public string Ffmpeg => Path.Combine(InstallDir, "tools", "ffmpeg.exe");
+    public string Uv => Path.Combine(InstallDir, "tools", "uv.exe");
 
     public string Storage => Path.Combine(DataDir, "storage");
     public string Models => Path.Combine(DataDir, "models");
