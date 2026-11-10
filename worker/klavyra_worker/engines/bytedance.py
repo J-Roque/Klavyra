@@ -1,5 +1,6 @@
 """ByteDance high-resolution piano transcription (Kong et al., Apache-2.0): notes, velocity and sustain pedal."""
 
+import os
 import urllib.request
 from pathlib import Path
 
@@ -8,16 +9,24 @@ from .base import Report, torch_device
 from .download import DownloadMeter
 
 CHECKPOINT_URL = "https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1"
-CHECKPOINT_PATH = Path.home() / "piano_transcription_inference_data" / "note_F1=0.9677_pedal_F1=0.9186.pth"
+CHECKPOINT_NAME = "note_F1=0.9677_pedal_F1=0.9186.pth"
 CHECKPOINT_MIN_BYTES = 160_000_000
+
+
+def checkpoint_path() -> Path:
+    """The desktop app keeps models in its own folder (KLAVYRA_MODELS); otherwise the library's usual place."""
+    models = os.environ.get("KLAVYRA_MODELS")
+    folder = Path(models) / "bytedance" if models else Path.home() / "piano_transcription_inference_data"
+    return folder / CHECKPOINT_NAME
 
 
 def ensure_checkpoint(report: Report) -> Path:
     # The library downloads with `wget`, which does not exist on Windows, so we fetch it ourselves.
-    if CHECKPOINT_PATH.exists() and CHECKPOINT_PATH.stat().st_size >= CHECKPOINT_MIN_BYTES:
-        return CHECKPOINT_PATH
-    CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = CHECKPOINT_PATH.with_suffix(".part")
+    path = checkpoint_path()
+    if path.exists() and path.stat().st_size >= CHECKPOINT_MIN_BYTES:
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".part")
     meter = DownloadMeter("ByteDance", None, report)
 
     def on_block(blocks: int, block_size: int, total: int) -> None:
@@ -25,8 +34,8 @@ def ensure_checkpoint(report: Report) -> Path:
         meter.update(blocks * block_size)
 
     urllib.request.urlretrieve(CHECKPOINT_URL, tmp, on_block)
-    tmp.replace(CHECKPOINT_PATH)
-    return CHECKPOINT_PATH
+    tmp.replace(path)
+    return path
 
 
 class ByteDancePianoEngine:

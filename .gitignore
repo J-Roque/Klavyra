@@ -483,6 +483,8 @@ $RECYCLE.BIN/
 
 # Klavyra
 storage/
+# The desktop build copies the compiled web app here
+src/Klavyra.Api/wwwroot/
 worker/.venv/
 worker/out/
 __pycache__/

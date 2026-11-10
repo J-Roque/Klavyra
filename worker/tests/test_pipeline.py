@@ -3,6 +3,7 @@ from pathlib import Path
 import mido
 import pytest
 
+from klavyra_worker.engines.bytedance import CHECKPOINT_NAME, checkpoint_path
 from klavyra_worker.engines.download import DownloadMeter, download_message
 from klavyra_worker.engines.muscriptor_engine import explain_failure, read_piano_notes
 from klavyra_worker.job import _reporting
@@ -184,3 +185,10 @@ def test_read_piano_notes_honours_tempo_map_and_skips_drums(tmp_path: Path):
     mid.save(str(path))
     notes = read_piano_notes(path)
     assert [(x.pitch, round(x.onset, 3), round(x.offset, 3)) for x in notes] == [(60, 1.0, 2.0)]
+
+
+def test_bytedance_checkpoint_follows_the_models_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("KLAVYRA_MODELS", raising=False)
+    assert checkpoint_path() == Path.home() / "piano_transcription_inference_data" / CHECKPOINT_NAME
+    monkeypatch.setenv("KLAVYRA_MODELS", str(tmp_path))
+    assert checkpoint_path() == tmp_path / "bytedance" / CHECKPOINT_NAME
