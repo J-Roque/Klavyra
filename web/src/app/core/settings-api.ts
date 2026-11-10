@@ -9,6 +9,14 @@ export interface WorkerHealth {
   musescore: boolean;
   ffmpeg: boolean;
   huggingFaceToken: boolean;
+  /** Installed version of the link downloader (yt-dlp). */
+  downloader?: string | null;
+}
+
+export interface DownloaderUpdate {
+  before: string | null;
+  after: string | null;
+  updated: boolean;
 }
 
 export interface AppSettings {
@@ -37,6 +45,11 @@ export class SettingsApi {
 
   saveHuggingFaceToken(token: string) {
     return this.http.put<HuggingFaceStatus>('/api/settings/hugging-face', { token });
+  }
+
+  /** Installs the newest link downloader; video sites change often and an old one stops working. */
+  updateDownloader() {
+    return this.http.post<DownloaderUpdate>('/api/settings/downloader/update', null);
   }
 
   removeHuggingFaceToken() {

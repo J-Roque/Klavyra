@@ -174,12 +174,12 @@ export class PlayerController {
         baseUrl: SALAMANDER,
         release: 1,
         onload: () => resolve(),
-        // The samples come from the internet: without them the player carries on with the original audio.
+        // Without the samples the player carries on with the original audio.
         onerror: () => {
           this.sampler?.dispose();
           this.sampler = undefined;
           this.synthOn.set(false);
-          this.notify('No se pudo cargar el piano sintetizado. Revisa tu conexión a internet.');
+          this.notify('No se pudo cargar el sonido del piano. Puedes seguir con el audio original.');
           resolve();
         },
       }).toDestination();

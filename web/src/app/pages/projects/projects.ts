@@ -56,6 +56,22 @@ export class Projects {
     });
   }
 
+  protected cancel(project: Project): void {
+    this.confirm.confirm({
+      header: 'Cancelar transcripción',
+      message: `¿Cancelar «${project.title}»? Podrás reintentarla después.`,
+      icon: 'pi pi-times-circle',
+      acceptLabel: 'Cancelar transcripción',
+      rejectLabel: 'Seguir',
+      acceptButtonProps: { severity: 'danger' },
+      rejectButtonProps: { severity: 'secondary', outlined: true },
+      accept: () =>
+        this.store.cancel(project.id).subscribe({
+          error: () => this.messages.add({ severity: 'error', summary: 'No se pudo cancelar', detail: 'Puede que ya haya terminado.' }),
+        }),
+    });
+  }
+
   protected remove(project: Project): void {
     this.confirm.confirm({
       header: 'Eliminar transcripción',

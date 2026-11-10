@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, input, OnDestroy, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Title } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
@@ -49,6 +50,11 @@ export class ProjectPage implements OnDestroy {
 
   protected readonly project = signal<Project | null>(null);
   protected readonly notFound = signal(false);
+  /** The project could not be loaded for a reason other than not existing (Klavyra is not answering). */
+  protected readonly offline = signal(false);
+  /** The finished project's notes or score could not be loaded. */
+  protected readonly playerFailed = signal(false);
+  protected readonly cancelling = signal(false);
   protected readonly player = signal<PlayerController | null>(null);
   protected readonly musicXml = signal<string | null>(null);
   protected readonly tab = signal<'keys' | 'score' | 'roblox'>('keys');
@@ -116,12 +122,56 @@ export class ProjectPage implements OnDestroy {
         this.now.set(Date.now());
       }
     });
-    inject(ProgressHub).onUpdate((p) => {
-      if (p.id !== this.project()?.id) return;
-      const wasDone = this.project()?.status === 'Done';
-      this.project.set(p);
-      if (p.status === 'Done' && !wasDone) this.loadPlayer(p);
+    const hub = inject(ProgressHub);
+    hub.onUpdate((p) => {
+      if (p.id === this.project()?.id) this.show(p);
     });
+    // Updates sent while the live connection was down are lost: ask for the project again.
+    hub.onResync(() => this.api.get(this.id()).subscribe({ next: (p) => this.show(p), error: () => {} }));
+  }
+
+  /** Takes a newer copy of this project and loads the player the moment it is done. */
+  private show(p: Project): void {
+    const wasDone = this.project()?.status === 'Done';
+    this.project.set(p);
+    this.pageTitle.setTitle(`${p.title} · Klavyra`);
+    if (p.status === 'Done' && !wasDone) this.loadPlayer(p);
+  }
+
+  protected cancel(): void {
+    const p = this.project();
+    if (!p) return;
+    this.confirm.confirm({
+      header: 'Cancelar transcripción',
+      message: `¿Cancelar «${p.title}»? Podrás reintentarla después.`,
+      icon: 'pi pi-times-circle',
+      acceptLabel: 'Cancelar transcripción',
+      rejectLabel: 'Seguir',
+      acceptButtonProps: { severity: 'danger' },
+      rejectButtonProps: { severity: 'secondary', outlined: true },
+      accept: () => {
+        this.cancelling.set(true);
+        this.store.cancel(p.id).subscribe({
+          next: (updated) => {
+            this.cancelling.set(false);
+            this.show(updated);
+          },
+          error: () => {
+            this.cancelling.set(false);
+            this.messages.add({ severity: 'error', summary: 'No se pudo cancelar', detail: 'Puede que ya haya terminado.' });
+          },
+        });
+      },
+    });
+  }
+
+  protected reload(): void {
+    this.load(this.id());
+  }
+
+  protected reloadPlayer(): void {
+    const p = this.project();
+    if (p) this.loadPlayer(p);
   }
 
   ngOnDestroy(): void {
@@ -206,23 +256,33 @@ export class ProjectPage implements OnDestroy {
     this.musicXml.set(null);
     this.tab.set('keys');
     this.scoreOpened.set(false);
+    this.project.set(null);
+    this.notFound.set(false);
+    this.offline.set(false);
+    this.playerFailed.set(false);
     this.api.get(id).subscribe({
       next: (p) => {
+        if (id !== this.id()) return; // the user already moved to another project
         this.project.set(p);
         this.pageTitle.setTitle(`${p.title} · Klavyra`);
         if (p.status === 'Done') this.loadPlayer(p);
       },
-      error: () => this.notFound.set(true),
+      error: (e: HttpErrorResponse) => (e.status === 404 ? this.notFound : this.offline).set(true),
     });
   }
 
   private loadPlayer(p: Project): void {
-    forkJoin({ data: this.api.playerData(p.id), xml: this.api.musicXml(p.id) }).subscribe(({ data, xml }) => {
-      this.player()?.destroy();
-      this.player.set(new PlayerController(data, this.api.fileUrl(p.id, 'audio'), (detail) =>
-        this.messages.add({ severity: 'warn', summary: 'Reproductor', detail }),
-      ));
-      this.musicXml.set(xml);
+    this.playerFailed.set(false);
+    forkJoin({ data: this.api.playerData(p.id), xml: this.api.musicXml(p.id) }).subscribe({
+      next: ({ data, xml }) => {
+        if (p.id !== this.id()) return;
+        this.player()?.destroy();
+        this.player.set(new PlayerController(data, this.api.fileUrl(p.id, 'audio'), (detail) =>
+          this.messages.add({ severity: 'warn', summary: 'Reproductor', detail }),
+        ));
+        this.musicXml.set(xml);
+      },
+      error: () => this.playerFailed.set(true),
     });
   }
 }
