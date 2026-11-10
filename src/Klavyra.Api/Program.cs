@@ -45,6 +45,15 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+
+// The desktop build copies the compiled Angular app into wwwroot; in development Angular serves itself.
+var servesWeb = app.Environment.WebRootFileProvider.GetFileInfo("index.html").Exists;
+if (servesWeb)
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -54,6 +63,13 @@ if (app.Environment.IsDevelopment())
 app.MapDefaultEndpoints();
 app.MapProjects();
 app.MapHub<ProgressHub>("/hubs/progress");
+
+if (servesWeb)
+{
+    // Angular routes such as /projects/123 are pages of the app; a wrong /api address stays a 404.
+    app.MapFallback("/api/{*path}", () => Results.NotFound());
+    app.MapFallbackToFile("index.html");
+}
 
 app.Run();
 
