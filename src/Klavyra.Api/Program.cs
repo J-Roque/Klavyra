@@ -42,7 +42,9 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<KlavyraDb>().Database.EnsureCreatedAsync();
+    await DatabaseMigrator.MigrateAsync(
+        scope.ServiceProvider.GetRequiredService<KlavyraDb>(),
+        scope.ServiceProvider.GetRequiredService<ILogger<Program>>());
 }
 
 app.UseExceptionHandler();
