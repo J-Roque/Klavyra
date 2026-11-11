@@ -18,7 +18,7 @@ import { Tag } from 'primeng/tag';
 import { Tooltip } from 'primeng/tooltip';
 import { ENGINE_LABEL, FileKind, Project, STATUS_LABEL } from '../../core/models';
 import { ProgressHub } from '../../core/progress-hub';
-import { ProjectsApi } from '../../core/projects-api';
+import { deleteError, ProjectsApi } from '../../core/projects-api';
 import { ProjectsStore } from '../../core/projects-store';
 import { statusSeverity } from '../../core/status';
 import { FallingNotes } from '../../player/falling-notes';
@@ -203,11 +203,18 @@ export class ProjectPage implements OnDestroy {
       rejectLabel: 'Cancelar',
       acceptButtonProps: { severity: 'danger' },
       rejectButtonProps: { severity: 'secondary', outlined: true },
-      accept: () =>
+      accept: () => {
+        // The player keeps the audio file open while it streams it, and Windows will not delete an open file.
+        this.player()?.destroy();
+        this.player.set(null);
         this.store.delete(p.id).subscribe({
           next: () => void this.router.navigate(['/projects']),
-          error: () => this.messages.add({ severity: 'error', summary: 'No se pudo eliminar' }),
-        }),
+          error: (e: HttpErrorResponse) => {
+            this.messages.add({ severity: 'error', summary: 'No se pudo eliminar', detail: deleteError(e) });
+            this.loadPlayer(p); // it stays, so the page works again
+          },
+        });
+      },
     });
   }
 

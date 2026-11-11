@@ -38,6 +38,30 @@ public sealed class FileStorage
     public string? UploadedSource(Guid id) =>
         Directory.Exists(ProjectDir(id)) ? Directory.EnumerateFiles(ProjectDir(id), "source.*").FirstOrDefault() : null;
 
+    /// <summary>
+    /// Deletes a project's folder. A browser that was playing its audio can hold a file for a moment after the
+    /// page lets go, so a locked folder is retried briefly; false if it is still in use.
+    /// </summary>
+    public async Task<bool> TryDeleteAsync(Guid id, CancellationToken ct, int attempts = 5, int waitMs = 200)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Delete(id);
+                return true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= attempts)
+                {
+                    return false;
+                }
+                await Task.Delay(waitMs, ct);
+            }
+        }
+    }
+
     public void Delete(Guid id)
     {
         if (Directory.Exists(ProjectDir(id)))
