@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -11,6 +12,7 @@ import { ProgressBar } from 'primeng/progressbar';
 import { Tag } from 'primeng/tag';
 import { Tooltip } from 'primeng/tooltip';
 import { ENGINE_LABEL, isFinished, Project, STATUS_LABEL } from '../../core/models';
+import { deleteError } from '../../core/projects-api';
 import { ProjectsStore } from '../../core/projects-store';
 import { statusSeverity } from '../../core/status';
 import { NotePreview } from './note-preview';
@@ -83,7 +85,7 @@ export class Projects {
       rejectButtonProps: { severity: 'secondary', outlined: true },
       accept: () =>
         this.store.delete(project.id).subscribe({
-          error: () => this.messages.add({ severity: 'error', summary: 'No se pudo eliminar' }),
+          error: (e: HttpErrorResponse) => this.messages.add({ severity: 'error', summary: 'No se pudo eliminar', detail: deleteError(e) }),
         }),
     });
   }

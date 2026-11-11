@@ -81,9 +81,26 @@ internal sealed class ServiceHost(AppPaths paths) : IDisposable
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
+    /// <summary>
+    /// Each start writes a new log, so the one from the run before is renamed first: after a crash, the user
+    /// reopening Klavyra must not erase the evidence. Only the last run is kept.
+    /// </summary>
+    internal static void KeepPreviousLog(string log)
+    {
+        if (!File.Exists(log)) return;
+        try
+        {
+            File.Move(log, Path.ChangeExtension(log, ".anterior.log"), overwrite: true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
     private Process Start(ProcessStartInfo start, string name)
     {
-        var log = new StreamWriter(Path.Combine(paths.Logs, $"{name}.log"), append: false) { AutoFlush = true };
+        var logPath = Path.Combine(paths.Logs, $"{name}.log");
+        KeepPreviousLog(logPath);
+        var log = new StreamWriter(logPath, append: false) { AutoFlush = true };
         log.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {start.FileName} {string.Join(' ', start.ArgumentList)}");
         var process = new Process { StartInfo = start };
         DataReceivedEventHandler write = (_, e) =>

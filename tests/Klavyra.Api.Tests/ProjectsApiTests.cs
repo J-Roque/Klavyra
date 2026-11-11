@@ -211,6 +211,30 @@ public sealed class ProjectsApiTests(KlavyraFactory factory) : IClassFixture<Kla
     }
 
     [Fact]
+    public async Task A_project_whose_files_are_in_use_is_kept_whole_and_can_be_deleted_afterwards()
+    {
+        var created = await CreateAsync(new() { ["url"] = "https://example.com/en-uso.mp3" });
+        var project = (await created.Content.ReadFromJsonAsync<ProjectDto>(Json))!;
+        await WaitFinishedAsync(project.Id);
+        var notes = Path.Combine(factory.StorageRoot, "projects", project.Id.ToString("N"), "notes.json");
+
+        string detail;
+        using (File.Open(notes, FileMode.Open, FileAccess.Read, FileShare.None)) // like a player still streaming it
+        {
+            var blocked = await _client.DeleteAsync($"/api/projects/{project.Id}");
+            Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+            detail = await blocked.Content.ReadAsStringAsync();
+        }
+        Assert.Contains("otro programa", detail);
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync($"/api/projects/{project.Id}")).StatusCode); // still listed
+        Assert.True(File.Exists(notes));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync($"/api/projects/{project.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"/api/projects/{project.Id}")).StatusCode);
+        Assert.False(Directory.Exists(Path.GetDirectoryName(notes)));
+    }
+
+    [Fact]
     public async Task Link_project_takes_the_video_title_unless_the_user_named_it()
     {
         factory.Worker.VideoTitle = "Clair de Lune – Debussy";

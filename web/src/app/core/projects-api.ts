@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { FileKind, NewProject, PlayerData, Project } from './models';
 
@@ -48,4 +48,9 @@ export class ProjectsApi {
   fileUrl(id: string, kind: FileKind, download = false): string {
     return `/api/projects/${id}/files/${kind}${download ? '?download=true' : ''}`;
   }
+}
+
+/** The API says why a project could not be deleted (files in use, still processing); undefined if it did not. */
+export function deleteError(error: HttpErrorResponse): string | undefined {
+  return typeof error.error === 'string' && error.error.length > 0 ? error.error : undefined;
 }

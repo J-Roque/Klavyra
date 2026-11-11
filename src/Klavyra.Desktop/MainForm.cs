@@ -119,13 +119,21 @@ internal sealed class MainForm : Form
         };
         web.NavigationStarting += (_, e) =>
         {
-            if (_app is not null && IsExternal(e.Uri, _app))
+            // A file dropped on the window would replace Klavyra with that file: never leave the app for a local file.
+            if (IsLocalFile(e.Uri))
+            {
+                e.Cancel = true;
+            }
+            else if (_app is not null && IsExternal(e.Uri, _app))
             {
                 e.Cancel = true;
                 OpenExternal(e.Uri);
             }
         };
     }
+
+    internal static bool IsLocalFile(string uri) =>
+        Uri.TryCreate(uri, UriKind.Absolute, out var target) && target.Scheme == Uri.UriSchemeFile;
 
     internal static bool IsExternal(string uri, Uri app) =>
         Uri.TryCreate(uri, UriKind.Absolute, out var target)

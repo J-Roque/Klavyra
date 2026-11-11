@@ -6,6 +6,7 @@ import { Drawer } from 'primeng/drawer';
 import { Toast } from 'primeng/toast';
 import { filter } from 'rxjs';
 import { Logo } from './layout/logo';
+import { blockStrayDrops } from './core/stray-drops';
 import { Sidebar } from './layout/sidebar';
 
 @Component({
@@ -18,6 +19,7 @@ export class App {
   protected readonly collapsed = signal(false);
 
   constructor() {
+    blockStrayDrops();
     inject(Router)
       .events.pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => this.drawerOpen.set(false));

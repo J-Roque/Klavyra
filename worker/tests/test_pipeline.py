@@ -366,3 +366,65 @@ def test_downloader_update_runs_uv_against_this_python(tmp_path: Path, monkeypat
     with pytest.raises(settings.TokenError, match="sin red") as failed:
         settings.update_downloader(broken)
     assert failed.value.status == 502
+
+
+def test_a_hung_or_missing_musescore_only_means_no_pdf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import subprocess
+
+    from klavyra_worker.pipeline import pdf
+
+    xml, out = tmp_path / "score.musicxml", tmp_path / "score.pdf"
+    xml.write_text("<score/>")
+    monkeypatch.setattr(pdf, "musescore_exe", lambda: None)
+    assert pdf.render_pdf(xml, out) is False
+
+    monkeypatch.setattr(pdf, "musescore_exe", lambda: "MuseScore4.exe")
+
+    def hangs(cmd, **_):
+        out.write_bytes(b"%PDF half written")
+        raise subprocess.TimeoutExpired(cmd, 300)
+
+    monkeypatch.setattr(pdf.subprocess, "run", hangs)
+    assert pdf.render_pdf(xml, out) is False
+    assert not out.exists()  # no broken PDF is left to be offered for download
+
+    def missing(cmd, **_):
+        raise FileNotFoundError(cmd[0])
+
+    monkeypatch.setattr(pdf.subprocess, "run", missing)
+    assert pdf.render_pdf(xml, out) is False
+
+    monkeypatch.setattr(pdf.subprocess, "run", lambda cmd, **_: subprocess.CompletedProcess(cmd, 0, b"", b""))
+    out.write_bytes(b"%PDF ok")
+    assert pdf.render_pdf(xml, out) is True
+
+
+def test_a_job_whose_pdf_fails_still_finishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import job
+    from klavyra_worker.models import BeatGrid, Transcription
+    from klavyra_worker.pipeline import fetch, pdf
+
+    wav = tmp_path / "input.wav"
+    monkeypatch.setattr(fetch, "normalize", lambda *a, **k: (wav, tmp_path / "playback.mp3"))
+    monkeypatch.setattr(job, "_duration", lambda _: 4.0)
+    monkeypatch.setattr(job, "track_beats", lambda _: GRID)
+    notes = [n(i * BEAT, 72 + i) for i in range(8)]
+
+    class Engine:
+        def transcribe(self, wav, out, report):
+            return Transcription(notes)
+
+    monkeypatch.setattr(job, "get_engine", lambda *a, **k: Engine())
+    monkeypatch.setattr(pdf, "musescore_exe", lambda: "MuseScore4.exe")
+
+    def hangs(cmd, **_):
+        import subprocess
+
+        raise subprocess.TimeoutExpired(cmd, 300)
+
+    monkeypatch.setattr(pdf.subprocess, "run", hangs)
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"x")
+    events = list(job.run_job(job.JobRequest(tmp_path, file=source, job_id="pdf")))
+    last = events[-1]
+    assert last.stage == "done" and "pdf" not in last.files and {"notes", "midi", "musicxml"} <= set(last.files)
