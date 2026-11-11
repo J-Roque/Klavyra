@@ -14,6 +14,9 @@ public static class DatabaseMigrator
     public static async Task MigrateAsync(KlavyraDb db, ILogger? logger = null, CancellationToken ct = default)
     {
         var database = db.Database;
+        // The transcription worker and the API write at the same time (progress, cancel, delete); the default
+        // rollback journal makes one of them fail with "database is locked", WAL lets them take turns.
+        await database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL", ct);
         var legacy = await HasTableAsync(db, "Projects", ct) && !await HasTableAsync(db, "__EFMigrationsHistory", ct);
         var pending = (await database.GetPendingMigrationsAsync(ct)).ToList();
         if (!legacy && pending.Count == 0)
@@ -50,9 +53,10 @@ public static class DatabaseMigrator
         }
         try
         {
+            db.Database.ExecuteSqlRaw("PRAGMA wal_checkpoint(TRUNCATE)"); // what is still only in the -wal file
             File.Copy(file, file + BackupSuffix, overwrite: true);
         }
-        catch (IOException e)
+        catch (Exception e) when (e is IOException or Microsoft.Data.Sqlite.SqliteException)
         {
             logger?.LogWarning(e, "Could not back up the database before migrating it");
         }

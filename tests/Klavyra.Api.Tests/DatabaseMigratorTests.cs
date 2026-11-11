@@ -66,6 +66,31 @@ public sealed class DatabaseMigratorTests : IDisposable
     }
 
     [Fact]
+    public async Task The_database_lets_two_writers_take_turns()
+    {
+        await using (var db = Open())
+        {
+            await DatabaseMigrator.MigrateAsync(db, ct: TestContext.Current.CancellationToken);
+            var mode = await db.Database.SqlQuery<string>($"PRAGMA journal_mode").ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(["wal"], mode);
+        }
+
+        // A reader in the middle of its work (a deferred transaction that has already read) does not make a writer fail.
+        await using var reader = Open();
+        await using var writer = Open();
+        await reader.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
+        var connection = (SqliteConnection)reader.Database.GetDbConnection();
+        await using var reading = connection.BeginTransaction(deferred: true);
+        await using var count = connection.CreateCommand();
+        count.CommandText = "SELECT count(*) FROM Projects";
+        count.Transaction = reading;
+        _ = await count.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+
+        writer.Projects.Add(Song("Mientras se lee"));
+        await writer.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task Migrating_again_changes_nothing()
     {
         await using var db = Open();
