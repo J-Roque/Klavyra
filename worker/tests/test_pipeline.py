@@ -251,6 +251,7 @@ def test_errors_are_explained_in_plain_words():
 
     assert "privado" in explain(DownloadError("ERROR: [youtube] abc: Private video. Sign in if you've been granted access"))
     assert "ya no está disponible" in explain(DownloadError("ERROR: [youtube] abc: Video unavailable"))
+    assert "ya no está disponible" in explain(DownloadError("ERROR: [youtube] abc: This video is unavailable"))
     assert "conexión a internet" in explain(DownloadError("ERROR: Unable to download webpage: <urlopen error [Errno 11001] getaddrinfo failed>"))
     assert "actualiza el descargador" in explain(DownloadError("ERROR: [youtube] abc: nsig extraction failed")).lower()
     assert "no sabe descargar" in explain(DownloadError("ERROR: Unsupported URL: https://example.com"))

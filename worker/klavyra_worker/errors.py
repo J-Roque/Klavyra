@@ -20,7 +20,7 @@ _DOWNLOAD = (
      "El video tiene restricción de edad y no se puede descargar sin iniciar sesión."),
     (("not a bot", "sign in to confirm"),
      "El sitio pidió comprobar que no eres un robot. Espera unos minutos y reintenta. " + UPDATE_HINT),
-    (("video unavailable", "has been removed", "no longer available", "does not exist", "account has been terminated"),
+    (("video unavailable", "video is unavailable", "has been removed", "no longer available", "does not exist", "account has been terminated"),
      "El video ya no está disponible o el enlace es incorrecto."),
     (("not available in your country", "geo restrict", "geo-restrict"),
      "El video no está disponible en tu país."),
