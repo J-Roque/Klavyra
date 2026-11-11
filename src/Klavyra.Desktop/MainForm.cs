@@ -187,6 +187,17 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        // Only when the user closes the window; Windows shutting down or an update must not be held back.
+        if (e.CloseReason == CloseReason.UserClosing && _app is not null && _web.Visible && CloseGuard.Unfinished(_app) > 0)
+        {
+            var answer = MessageBox.Show(this, CloseGuard.Question, "Klavyra", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (answer != DialogResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
         _closing.Cancel();
         _host.Dispose();
         base.OnFormClosing(e);

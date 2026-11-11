@@ -46,17 +46,30 @@
         @if (p.status === 'Failed') {
           <p-tag class="absolute top-3 left-3" [value]="statusLabel[p.status]" [severity]="severity(p.status)" [pTooltip]="p.error ?? ''" />
         }
-        <p-button
-          class="absolute right-2 bottom-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity"
-          icon="pi pi-trash"
-          size="small"
-          [text]="true"
-          severity="secondary"
-          ariaLabel="Eliminar"
-          [disabled]="!isFinished(p)"
-          (onClick)="remove(p)"
-          pTooltip="Eliminar"
-        />
+        @if (isFinished(p)) {
+          <p-button
+            class="absolute right-2 bottom-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity"
+            icon="pi pi-trash"
+            size="small"
+            [text]="true"
+            severity="secondary"
+            ariaLabel="Eliminar"
+            (onClick)="remove(p)"
+            pTooltip="Eliminar"
+          />
+        } @else {
+          <p-button
+            class="absolute right-2 bottom-3"
+            icon="pi pi-times"
+            size="small"
+            [text]="true"
+            severity="secondary"
+            ariaLabel="Cancelar transcripción"
+            [disabled]="p.message === 'Cancelando…'"
+            (onClick)="cancel(p)"
+            pTooltip="Cancelar transcripción"
+          />
+        }
       </article>
     }
   </div>

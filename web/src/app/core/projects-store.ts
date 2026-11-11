@@ -16,17 +16,29 @@ export class ProjectsStore {
   readonly failedProjects = computed(() => this.projects().filter((p) => p.status === 'Failed'));
 
   constructor() {
-    inject(ProgressHub).onUpdate((p) => this.upsert(p));
+    const hub = inject(ProgressHub);
+    hub.onUpdate((p) => this.upsert(p));
+    hub.onResync(() => this.reload());
+    this.reload();
+  }
+
+  /** Asks the API for the whole list again (first load, and after the live connection was lost). */
+  reload(): void {
     this.api.list().subscribe({
       next: (list) => {
         this.projects.set(list);
         this.loading.set(false);
+        this.failed.set(false);
       },
       error: () => {
         this.loading.set(false);
         this.failed.set(true);
       },
     });
+  }
+
+  cancel(id: string) {
+    return this.api.cancel(id).pipe(tap((p) => this.upsert(p)));
   }
 
   create(input: NewProject) {

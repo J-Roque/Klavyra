@@ -28,6 +28,11 @@ export class ProjectsApi {
     return this.http.delete<void>(`/api/projects/${id}`);
   }
 
+  /** Stops a transcription that is waiting or running; it ends as Failed with "Cancelada.". */
+  cancel(id: string) {
+    return this.http.post<Project>(`/api/projects/${id}/cancel`, null);
+  }
+
   retry(id: string) {
     return this.http.post<Project>(`/api/projects/${id}/retry`, null);
   }

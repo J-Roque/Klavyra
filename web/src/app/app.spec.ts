@@ -16,7 +16,7 @@ describe('App', () => {
         provideHttpClientTesting(),
         MessageService,
         ConfirmationService,
-        { provide: ProgressHub, useValue: { onUpdate: () => undefined } },
+        { provide: ProgressHub, useValue: { onUpdate: () => undefined, onResync: () => undefined } },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(App);

@@ -45,8 +45,22 @@ public sealed class FakeWorker : HttpMessageHandler
 
     public List<string> SettingsBodies { get; } = [];
 
+    /// <summary>The title the worker reads from a downloaded video.</summary>
+    public string? VideoTitle { get; set; }
+
+    /// <summary>While true, a job reports its first step and then waits until it is cancelled.</summary>
+    public bool Hold { get; set; }
+
+    public System.Collections.Concurrent.ConcurrentDictionary<string, bool> CancelledJobs { get; } = new();
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        if (request.RequestUri!.AbsolutePath == "/cancel")
+        {
+            var cancel = JsonSerializer.Deserialize<JsonElement>(await request.Content!.ReadAsStringAsync(ct));
+            CancelledJobs[cancel.GetProperty("jobId").GetString()!] = true;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"running\":true}", Encoding.UTF8, "application/json") };
+        }
         if (request.RequestUri!.AbsolutePath != "/transcribe")
         {
             if (request.Content is not null) SettingsBodies.Add(await request.Content.ReadAsStringAsync(ct));
@@ -63,8 +77,27 @@ public sealed class FakeWorker : HttpMessageHandler
         Requests.Add(body);
         var outDir = Directory.CreateDirectory(body.GetProperty("outputDir").GetString()!).FullName;
 
+        var title = VideoTitle is null ? "" : $",\"title\":{JsonSerializer.Serialize(VideoTitle)}";
+        var first = $"data: {{\"stage\":\"downloading\",\"progress\":10,\"message\":\"Descargando\"{title}}}\n\n";
+        if (Hold)
+        {
+            var jobId = body.GetProperty("jobId").GetString()!;
+            var pipe = new System.IO.Pipelines.Pipe();
+            _ = Task.Run(async () =>
+            {
+                await pipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(first));
+                while (!CancelledJobs.ContainsKey(jobId))
+                {
+                    await Task.Delay(20);
+                }
+                await pipe.Writer.WriteAsync(Encoding.UTF8.GetBytes("data: {\"stage\":\"failed\",\"progress\":100,\"error\":\"Cancelada.\"}\n\n"));
+                await pipe.Writer.CompleteAsync();
+            }, CancellationToken.None);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(pipe.Reader.AsStream()) };
+        }
+
         var sse = new StringBuilder();
-        sse.Append("data: {\"stage\":\"downloading\",\"progress\":10,\"message\":\"Descargando\"}\n\n");
+        sse.Append(first);
         sse.Append("data: {\"stage\":\"transcribing\",\"progress\":50}\n\n");
         if (Fail)
         {
@@ -177,6 +210,64 @@ public sealed class ProjectsApiTests(KlavyraFactory factory) : IClassFixture<Kla
         Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsync($"/api/projects/{Guid.NewGuid()}/retry", null)).StatusCode);
     }
 
+    [Fact]
+    public async Task Link_project_takes_the_video_title_unless_the_user_named_it()
+    {
+        factory.Worker.VideoTitle = "Clair de Lune – Debussy";
+        try
+        {
+            var unnamed = await CreateAsync(new() { ["url"] = "https://www.youtube.com/watch?v=luna" });
+            var project = (await unnamed.Content.ReadFromJsonAsync<ProjectDto>(Json))!;
+            Assert.Equal("www.youtube.com", project.Title);
+            Assert.Equal("Clair de Lune – Debussy", (await WaitFinishedAsync(project.Id)).Title);
+
+            var named = await CreateAsync(new() { ["url"] = "https://www.youtube.com/watch?v=luna2", ["title"] = "Mi versión" });
+            project = (await named.Content.ReadFromJsonAsync<ProjectDto>(Json))!;
+            Assert.Equal("Mi versión", (await WaitFinishedAsync(project.Id)).Title);
+        }
+        finally
+        {
+            factory.Worker.VideoTitle = null;
+        }
+    }
+
+    [Fact]
+    public async Task Running_and_waiting_projects_can_be_cancelled_and_retried()
+    {
+        factory.Worker.Hold = true;
+        ProjectDto running, waiting;
+        try
+        {
+            running = (await (await CreateAsync(new() { ["url"] = "https://example.com/en-curso.mp3" })).Content.ReadFromJsonAsync<ProjectDto>(Json))!;
+            await WaitStatusAsync(running.Id, Domain.ProjectStatus.Downloading);
+            waiting = (await (await CreateAsync(new() { ["url"] = "https://example.com/en-cola.mp3" })).Content.ReadFromJsonAsync<ProjectDto>(Json))!;
+
+            var cancelledWaiting = await _client.PostAsync($"/api/projects/{waiting.Id}/cancel", null);
+            Assert.Equal(HttpStatusCode.OK, cancelledWaiting.StatusCode);
+            var dto = (await cancelledWaiting.Content.ReadFromJsonAsync<ProjectDto>(Json))!;
+            Assert.Equal(Domain.ProjectStatus.Failed, dto.Status);
+            Assert.Equal("Cancelada.", dto.Error);
+
+            var cancelledRunning = await _client.PostAsync($"/api/projects/{running.Id}/cancel", null);
+            Assert.Equal("Cancelando…", (await cancelledRunning.Content.ReadFromJsonAsync<ProjectDto>(Json))!.Message);
+            var ended = await WaitFinishedAsync(running.Id);
+            Assert.Equal(Domain.ProjectStatus.Failed, ended.Status);
+            Assert.Equal("Cancelada.", ended.Error);
+        }
+        finally
+        {
+            factory.Worker.Hold = false;
+        }
+
+        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsync($"/api/projects/{running.Id}/cancel", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsync($"/api/projects/{Guid.NewGuid()}/cancel", null)).StatusCode);
+
+        // The one cancelled while waiting never reached the worker, and a retry is not cancelled by the old request.
+        Assert.DoesNotContain(factory.Worker.Requests, r => r.GetProperty("url").GetString() == "https://example.com/en-cola.mp3");
+        Assert.Equal(HttpStatusCode.OK, (await _client.PostAsync($"/api/projects/{waiting.Id}/retry", null)).StatusCode);
+        Assert.Equal(Domain.ProjectStatus.Done, (await WaitFinishedAsync(waiting.Id)).Status);
+    }
+
     [Theory]
     [InlineData(null, null)] // no source
     [InlineData("ftp://x.com/a.mp3", null)] // bad scheme
@@ -198,6 +289,16 @@ public sealed class ProjectsApiTests(KlavyraFactory factory) : IClassFixture<Kla
             form.Add(new StringContent(value), key);
         }
         return _client.PostAsync("/api/projects", form);
+    }
+
+    private async Task WaitStatusAsync(Guid id, Domain.ProjectStatus status)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            if ((await _client.GetFromJsonAsync<ProjectDto>($"/api/projects/{id}", Json))!.Status == status) return;
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+        throw new TimeoutException($"Project did not reach {status}");
     }
 
     private async Task<ProjectDto> WaitFinishedAsync(Guid id)

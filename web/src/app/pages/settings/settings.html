@@ -44,6 +44,19 @@
               </div>
             </div>
           </li>
+          <li class="flex items-start gap-3">
+            <i class="pi pi-link mt-0.5 text-muted-color"></i>
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold">Descargador de enlaces (YouTube, TikTok…)</div>
+              <div class="text-muted-color">
+                Versión {{ s.worker.downloader ?? 'desconocida' }}. Si un enlace que funciona en tu navegador falla en Klavyra, actualízalo: los sitios de vídeo cambian a menudo.
+              </div>
+              @if (downloaderError(); as error) {
+                <p-message class="block mt-2" severity="error" [text]="error" />
+              }
+            </div>
+            <p-button label="Actualizar" icon="pi pi-sync" severity="secondary" [outlined]="true" size="small" [loading]="updatingDownloader()" (onClick)="updateDownloader()" />
+          </li>
         </ul>
       }
     } @else if (!loadFailed()) {

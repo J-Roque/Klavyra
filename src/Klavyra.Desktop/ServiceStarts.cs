@@ -19,6 +19,10 @@ internal static class ServiceStarts
         {
             env["FFMPEG"] = paths.Ffmpeg;
         }
+        if (File.Exists(paths.Uv))
+        {
+            env["KLAVYRA_UV"] = paths.Uv; // lets Ajustes update the link downloader without reinstalling
+        }
         return start;
     }
 

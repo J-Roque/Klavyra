@@ -36,6 +36,8 @@ export class Settings implements OnInit {
   protected readonly checking = signal(false);
   protected readonly access = signal<HuggingFaceStatus | null>(null);
   protected readonly tokenError = signal<string | null>(null);
+  protected readonly updatingDownloader = signal(false);
+  protected readonly downloaderError = signal<string | null>(null);
 
   ngOnInit(): void {
     this.load();
@@ -79,6 +81,27 @@ export class Settings implements OnInit {
       error: (e) => {
         this.checking.set(false);
         this.tokenError.set(errorMessage(e));
+      },
+    });
+  }
+
+  protected updateDownloader(): void {
+    if (this.updatingDownloader()) return;
+    this.updatingDownloader.set(true);
+    this.downloaderError.set(null);
+    this.api.updateDownloader().subscribe({
+      next: (result) => {
+        this.updatingDownloader.set(false);
+        this.messages.add(
+          result.updated
+            ? { severity: 'success', summary: 'Descargador actualizado', detail: `Ahora tienes la versión ${result.after}.` }
+            : { severity: 'info', summary: 'Ya estaba al día', detail: `La versión ${result.after} es la más reciente.` },
+        );
+        this.load();
+      },
+      error: (e) => {
+        this.updatingDownloader.set(false);
+        this.downloaderError.set(errorMessage(e));
       },
     });
   }

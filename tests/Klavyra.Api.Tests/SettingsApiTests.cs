@@ -43,6 +43,22 @@ public sealed class SettingsApiTests(KlavyraFactory factory) : IClassFixture<Kla
     }
 
     [Fact]
+    public async Task Downloader_update_is_run_by_the_worker()
+    {
+        factory.Worker.Replies["POST /settings/downloader/update"] =
+            (HttpStatusCode.OK, "{\"before\":\"2026.1.1\",\"after\":\"2026.11.3\",\"updated\":true}");
+        var updated = await _client.PostAsync("/api/settings/downloader/update", null);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal("2026.11.3", (await updated.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("after").GetString());
+
+        factory.Worker.Replies["POST /settings/downloader/update"] =
+            (HttpStatusCode.Conflict, "{\"detail\":\"Hay una transcripción en curso. Actualiza cuando termine.\"}");
+        var busy = await _client.PostAsync("/api/settings/downloader/update", null);
+        Assert.Equal(HttpStatusCode.Conflict, busy.StatusCode);
+        Assert.Contains("en curso", await busy.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task A_worker_that_is_not_running_is_reported()
     {
         factory.Worker.Replies.Remove("GET /health");

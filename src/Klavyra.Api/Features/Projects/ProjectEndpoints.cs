@@ -11,6 +11,7 @@ public static class ProjectEndpoints
         DownloadFile.Map(group);
         DeleteProject.Map(group);
         RetryProject.Map(group);
+        CancelProject.Map(group);
         return app;
     }
 }
