@@ -6,10 +6,10 @@ Convierte cualquier canción en piano que puedas tocar: teclas cayendo, partitur
 
 | | |
 |---|---|
-| ![Partitura con cursor que sigue la música](docs/partitura.png) | ![Sube un audio o pega un enlace](docs/inicio.png) |
-| **Partitura** con cursor que sigue la música | **Empieza** subiendo un audio o pegando un enlace |
-| ![Ajustes: estado del equipo y del descargador](docs/ajustes.png) | |
-| **Ajustes**: comprueba tu GPU, ffmpeg y MuseScore | |
+| ![Sube un audio o pega un enlace](docs/inicio.png) | ![Tu repertorio de transcripciones](docs/repertorio.png) |
+| **Empieza** subiendo un audio o pegando un enlace | **Mi repertorio**: todas tus transcripciones |
+| ![Partitura con cursor que sigue la música](docs/partitura.png) | ![Ajustes: estado del equipo y del descargador](docs/ajustes.png) |
+| **Partitura** con cursor que sigue la música | **Ajustes**: comprueba tu GPU, ffmpeg y MuseScore |
 
 ## Descargar
 
