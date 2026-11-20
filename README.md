@@ -6,8 +6,6 @@ Sube una canción (MP3, WAV, MP4…) o pega un enlace y obtienes:
 - **Teclas cayendo** (estilo Synthesia) sincronizadas con el audio original, con mano derecha e izquierda
   en colores distintos, velocidad de 0.25× a 1×, bucle A-B, transposición y piano sintetizado.
 - **Partitura** de dos pentagramas con cursor que sigue la música (OpenSheetMusicDisplay).
-- **Vista Roblox**: la canción en notación de *Virtual Piano* (`t y u [tu]`…) para pianos de Roblox y
-  auto-pianos, con elección de mano, resolución, acordes máximos, transposición y la tecla del Do central.
 - Descargas en **MIDI** (dos pistas, con pedal), **MusicXML** (editable en MuseScore) y **PDF**.
 
 Todo corre en tu PC: sin suscripciones, sin límites de minutos y sin subir tu música a ningún servidor.
@@ -158,8 +156,7 @@ cd web && npx ng test --watch=false
 
 © 2026 Johel Roque.
 
-- Código de Klavyra: **GNU AGPL-3.0** (ver [LICENSE](LICENSE)). Puedes usarlo, modificarlo y compartirlo gratis; si
-  distribuyes una versión modificada, o la ofreces como servicio web, debes publicar su código con la misma licencia.
+- Klavyra es software libre bajo la licencia **GNU AGPL-3.0** (ver [LICENSE](LICENSE)).
 - Sonidos del piano (`web/public/audio/salamander`): *Salamander Grand Piano* de Alexander Holm, CC BY 3.0, en la
   versión de muestras que publica Tone.js.
 - ByteDance piano transcription: Apache-2.0. Beat This!: MIT. music21: BSD. OpenSheetMusicDisplay: BSD.
