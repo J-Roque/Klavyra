@@ -21,7 +21,7 @@ Con una GPU NVIDIA transcribe mucho más rápido, pero también funciona sin ell
 - **Partitura** de dos pentagramas con un cursor que sigue la música.
 - Velocidad de 0.25× a 1×, bucle A-B, transposición y piano sintetizado para practicar.
 - Descargas en **MIDI**, **MusicXML** (editable en MuseScore) y **PDF** (con [MuseScore 4](https://musescore.org) instalado).
-- Sin suscripciones, sin límites de minutos y sin subir tu música a ningún servidor.
+- Sin suscripciones ni límites de minutos.
 
 ¿Quieres compilarlo o contribuir? Mira [CONTRIBUTING.md](CONTRIBUTING.md).
 
