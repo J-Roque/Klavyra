@@ -62,7 +62,7 @@ Algunas decisiones:
 - **Nada sale del PC.** La API y el worker solo escuchan en `127.0.0.1`; el lanzador elige puertos libres y cierra
   los procesos hijos con un *Job Object* de Windows aunque la ventana se cierre de golpe.
 - **Instalador pequeño (~110 MB).** PyTorch (~2.5 GB) no va dentro: el lanzador crea el entorno con `uv` la primera
-  vez, con progreso y reintentos.
+  vez y muestra el avance de la descarga.
 - **Progreso en vivo.** El worker emite eventos por SSE, la API los guarda y los reenvía por SignalR; al reconectar,
   la web vuelve a pedir el estado para no quedarse con datos viejos.
 - **Datos que sobreviven a las actualizaciones.** Migraciones de EF Core (las bases antiguas se adoptan con copia de
