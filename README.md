@@ -2,10 +2,9 @@
 
 Convierte cualquier canción en piano que puedas tocar: teclas cayendo, partitura y MIDI, gratis y en tu PC.
 
-<!-- Capturas: guarda las imágenes en docs/ y descomenta estas líneas.
-![Teclas cayendo](docs/teclas.png)
-![Partitura](docs/partitura.png)
--->
+![Teclas cayendo sincronizadas con el audio](docs/teclas.png)
+
+![Partitura con cursor que sigue la música](docs/partitura.png)
 
 ## Descargar
 
