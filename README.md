@@ -4,7 +4,12 @@ Convierte cualquier canción en piano que puedas tocar: teclas cayendo, partitur
 
 ![Teclas cayendo sincronizadas con el audio](docs/teclas.png)
 
-![Partitura con cursor que sigue la música](docs/partitura.png)
+| | |
+|---|---|
+| ![Partitura con cursor que sigue la música](docs/partitura.png) | ![Sube un audio o pega un enlace](docs/inicio.png) |
+| **Partitura** con cursor que sigue la música | **Empieza** subiendo un audio o pegando un enlace |
+| ![Ajustes: estado del equipo y del descargador](docs/ajustes.png) | |
+| **Ajustes**: comprueba tu GPU, ffmpeg y MuseScore | |
 
 ## Descargar
 
