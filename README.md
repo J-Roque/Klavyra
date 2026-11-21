@@ -45,16 +45,27 @@ Funciona mejor con grabaciones de piano solo. Con otros instrumentos o con voz o
 
 ## Cómo funciona
 
+```mermaid
+flowchart TB
+    in(["🎵 Subes un audio o pegas un enlace"]) --> web
+
+    web["<b>Web</b> · Angular 21 + PrimeNG"]
+    api["<b>API</b> · ASP.NET Core 10<br/>cola de trabajos · SQLite · archivos"]
+    web <-->|"REST · progreso en vivo (SignalR)"| api
+    api <-->|"HTTP · progreso (SSE)"| worker
+
+    subgraph worker["Worker de IA en Python"]
+        direction LR
+        a["1 · Audio<br/>ffmpeg · yt-dlp"] --> n["2 · Notas<br/>ByteDance · MuScriptor"]
+        n --> r["3 · Ritmo<br/>Beat This!"]
+        r --> m["4 · Manos y partitura<br/>music21 · MuseScore"]
+    end
+
+    worker --> out(["🎹 Teclas cayendo · partitura · MIDI · MusicXML · PDF"])
 ```
-Angular 21 + PrimeNG ──REST + SignalR──> ASP.NET Core 10 API ──HTTP + SSE──> Worker Python (FastAPI, GPU)
-                                          (Vertical Slices,                   ├ yt-dlp / ffmpeg
-                                           EF Core SQLite + migraciones,      ├ ByteDance piano | MuScriptor
-                                           cola de 1 trabajo, cancelable)     ├ Beat This! (tempo/compases)
-                                                                              ├ separación de manos + music21
-                                                                              └ MuseScore 4 → PDF
-   En desarrollo: .NET Aspire 13 (dashboard con logs y trazas).
-   En escritorio: Klavyra.exe (WinForms + WebView2) arranca la API y el worker en puertos locales.
-```
+
+En escritorio, `Klavyra.exe` (WinForms + WebView2) abre la web y arranca la API y el worker en tu equipo.
+En desarrollo, .NET Aspire 13 levanta lo mismo con un solo comando y un panel con registros y trazas.
 
 1. **Audio.** ffmpeg normaliza el archivo; si es un enlace, yt-dlp lo descarga primero.
 2. **Notas.** Un modelo de IA (ByteDance Piano Transcription, o MuScriptor) detecta cada nota con su inicio, duración, intensidad y pedal.
