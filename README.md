@@ -1,119 +1,37 @@
 # Klavyra
 
-Alternativa libre y local a los servicios de pago que convierten audio o video en partituras de piano.
-Sube una canción (MP3, WAV, MP4…) o pega un enlace y obtienes:
+Convierte cualquier canción en piano que puedas tocar: teclas cayendo, partitura y MIDI, gratis y en tu PC.
 
-- **Teclas cayendo** (estilo Synthesia) sincronizadas con el audio original, con mano derecha e izquierda
-  en colores distintos, velocidad de 0.25× a 1×, bucle A-B, transposición y piano sintetizado.
-- **Partitura** de dos pentagramas con cursor que sigue la música (OpenSheetMusicDisplay).
-- Descargas en **MIDI** (dos pistas, con pedal), **MusicXML** (editable en MuseScore) y **PDF**.
+![Teclas cayendo sincronizadas con el audio](docs/teclas.png)
 
-Todo corre en tu PC con tu GPU NVIDIA: sin suscripciones ni límites de minutos.
-
-## Arquitectura
-
-```
-Angular 21 + PrimeNG ──REST + SignalR──> ASP.NET Core 10 API ──HTTP + SSE──> Worker Python (FastAPI, GPU)
-                                          (Vertical Slices,                   ├ yt-dlp / ffmpeg
-                                           EF Core SQLite,                    ├ ByteDance piano | MuScriptor
-                                           cola de 1 job)                     ├ Beat This! (tempo/compases)
-                                                                              ├ separación de manos + music21
-                                                                              └ MuseScore 4 → PDF
-                       todo orquestado con .NET Aspire 13 (dashboard con logs y trazas)
-```
-
-| Carpeta | Contenido |
+| | |
 |---|---|
-| `worker/` | Motor de IA: `klavyra_worker/engines` (motores intercambiables), `pipeline/` (audio, pulsos, manos, notación, PDF) |
-| `src/Klavyra.Api` | API: `Features/Projects/*` (un archivo por caso de uso), `Infrastructure/` (BD, almacenamiento, cola, cliente del worker) |
-| `src/Klavyra.AppHost` | Aspire: levanta worker, API y web con un solo comando |
-| `web/` | Angular 21 + PrimeNG 21 + PrimeIcons 7 + Tailwind 4 (`tailwindcss-primeui`, el reemplazo oficial de PrimeFlex) |
-| `storage/` | Se crea al ejecutar: base de datos SQLite y archivos de cada proyecto |
+| ![Sube un audio o pega un enlace](docs/inicio.png) | ![Tu repertorio de transcripciones](docs/repertorio.png) |
+| **Empieza** subiendo un audio o pegando un enlace | **Mi repertorio**: todas tus transcripciones |
+| ![Partitura con cursor que sigue la música](docs/partitura.png) | ![Ajustes: estado del equipo y del descargador](docs/ajustes.png) |
+| **Partitura** con cursor que sigue la música | **Ajustes**: comprueba tu GPU, ffmpeg y MuseScore |
 
-## Requisitos (una sola vez)
+## Descargar
 
-```bash
-winget install Microsoft.DotNet.SDK.10
-```
-```bash
-winget install astral-sh.uv
-```
-```bash
-winget install OpenJS.NodeJS.22
-```
-```bash
-winget install Gyan.FFmpeg
-```
-```bash
-winget install Musescore.Musescore
-```
+Descarga `Klavyra-Setup-<versión>.exe` desde [Releases](https://github.com/J-Roque/Klavyra/releases) y ejecútalo.
+No pide permisos de administrador.
 
-Y los drivers de NVIDIA actualizados. Luego instala las dependencias:
+Necesitas Windows 10 u 11 (64 bits) y unos 4 GB libres: la primera vez descarga lo necesario para la IA.
+Con una GPU NVIDIA transcribe mucho más rápido, pero también funciona sin ella.
 
-```bash
-cd worker && uv sync
-```
-```bash
-cd web && npm install
-```
+## Funciones
 
-### MuScriptor (opcional)
+- Sube un MP3, WAV o MP4, o pega un enlace.
+- **Teclas cayendo** sincronizadas con el audio original, con mano derecha e izquierda en colores distintos.
+- **Partitura** de dos pentagramas con un cursor que sigue la música.
+- Velocidad de 0.25× a 1×, bucle A-B, transposición y piano sintetizado para practicar.
+- Descargas en **MIDI**, **MusicXML** (editable en MuseScore) y **PDF** (con [MuseScore 4](https://musescore.org) instalado).
+- Sin suscripciones ni límites de minutos.
 
-El motor por defecto (ByteDance, especializado en piano) no necesita cuentas. Para usar **MuScriptor**:
+¿Quieres compilarlo o contribuir? Mira [CONTRIBUTING.md](CONTRIBUTING.md).
 
-1. Acepta la licencia en <https://huggingface.co/MuScriptor/muscriptor-small> (y medium/large si los usarás).
-2. Crea un token de lectura en <https://huggingface.co/settings/tokens> y ejecuta:
+## Licencia
 
-```bat
-cd worker
-.venv\Scripts\hf.exe auth login
-```
-
-Usa `hf.exe` directamente: si `uv` no reconoce el entorno, puede intentar recrearlo y borrar paquetes (por ejemplo, con el worker en marcha). Si eso ocurre, detén la app y ejecuta `uv sync --locked`.
-
-## Ejecutar
-
-```bash
-dotnet run --project src/Klavyra.AppHost
-```
-
-Se abre el dashboard de Aspire; la web queda en <http://localhost:4200>.
-La primera transcripción descarga los modelos (~170 MB ByteDance, ~80 MB Beat This!).
-
-### Probar solo el motor (Fase 1)
-
-```bash
-cd worker && uv run klavyra cancion.mp3 --engine bytedance_piano
-```
-```bash
-cd worker && uv run klavyra cancion.mp3 --engine muscriptor --model medium
-```
-
-Los resultados quedan en `worker/out/<nombre>-<motor>/` (`score.musicxml`, `score.mid`, `score.pdf`, `notes.json`).
-Ábrelos en MuseScore y compara los motores con tus canciones.
-
-## Pruebas
-
-```bash
-cd worker && uv run pytest
-```
-```bash
-dotnet test --solution Klavyra.slnx
-```
-```bash
-cd web && npx ng test --watch=false
-```
-
-## Licencias
-
-- Código de Klavyra: **GNU AGPL-3.0** (ver [LICENSE](LICENSE)). Puedes usarlo, modificarlo y compartirlo gratis; si
-  distribuyes una versión modificada, o la ofreces como servicio web, debes publicar su código con la misma licencia.
-- Sonidos del piano (`web/public/audio/salamander`): *Salamander Grand Piano* de Alexander Holm, CC BY 3.0, en la
-  versión de muestras que publica Tone.js.
-- ByteDance piano transcription: Apache-2.0. Beat This!: MIT. music21: BSD. OpenSheetMusicDisplay: BSD.
-- **PrimeNG 21.1.10, `@primeuix/themes` 2.0.3 y PrimeIcons 7.0.0**: MIT. Están fijadas a propósito en `web/package.json`:
-  PrimeNG 22, themes 3 y PrimeIcons 8 usan la *PrimeUI License*, que exige una clave. No las actualices sin revisar esto.
-- **MuScriptor**: código MIT, pero sus **pesos son CC BY-NC 4.0 (uso no comercial)**, y su licencia exige tener
-  derechos sobre la música que transcribes.
-- Descargar de YouTube u otras plataformas puede violar sus términos: úsalo solo para uso personal con contenido propio
-  o con permiso.
+© 2026 Johel Roque. Klavyra es software libre bajo la licencia [GNU AGPL-3.0](LICENSE).
+Los componentes de terceros y sus licencias están en [THIRD-PARTY-NOTICES](desktop/THIRD-PARTY-NOTICES.txt).
+Úsalo con música propia, de dominio público o con permiso.
