@@ -45,16 +45,61 @@ Funciona mejor con grabaciones de piano solo. Con otros instrumentos o con voz o
 
 ## Cómo funciona
 
+### Arquitectura (diagrama de contenedores C4)
+
+```mermaid
+flowchart TB
+    user(["Usuario<br/>sube un audio o pega un enlace"])
+
+    subgraph pc["Tu PC · Windows"]
+        desktop["Lanzador<br/>WinForms + WebView2<br/>abre la ventana y arranca los servicios"]
+        web["Aplicación web<br/>Angular 21 + PrimeNG<br/>teclas cayendo, partitura y reproductor"]
+        api["API<br/>ASP.NET Core 10<br/>proyectos, cola de trabajos y archivos"]
+        db[("Base de datos<br/>SQLite")]
+        worker["Worker de IA<br/>Python + FastAPI + PyTorch<br/>transcribe el audio a notas"]
+    end
+
+    sites["YouTube, TikTok…<br/>origen de los enlaces"]
+    models["Zenodo y Hugging Face<br/>modelos de IA, la primera vez"]
+
+    user -->|usa| desktop
+    desktop -->|muestra| web
+    desktop -.->|arranca| api
+    desktop -.->|arranca| worker
+    web <-->|"REST + SignalR"| api
+    api -->|"lee y escribe"| db
+    api <-->|"HTTP + SSE"| worker
+    worker -->|descarga audio| sites
+    worker -->|descarga modelos| models
+
+    classDef person fill:#2f7d6d,stroke:#1d5247,color:#ffffff
+    classDef app fill:#0f1f1a,stroke:#2f7d6d,color:#f5f1e8
+    classDef store fill:#e0b04f,stroke:#a77d2c,color:#1b1b1b
+    classDef ext fill:#8a8f8c,stroke:#5f6461,color:#ffffff
+    class user person
+    class desktop,web,api,worker app
+    class db store
+    class sites,models ext
+    style pc fill:transparent,stroke:#2f7d6d,stroke-dasharray:5 5
 ```
-Angular 21 + PrimeNG ──REST + SignalR──> ASP.NET Core 10 API ──HTTP + SSE──> Worker Python (FastAPI, GPU)
-                                          (Vertical Slices,                   ├ yt-dlp / ffmpeg
-                                           EF Core SQLite + migraciones,      ├ ByteDance piano | MuScriptor
-                                           cola de 1 trabajo, cancelable)     ├ Beat This! (tempo/compases)
-                                                                              ├ separación de manos + music21
-                                                                              └ MuseScore 4 → PDF
-   En desarrollo: .NET Aspire 13 (dashboard con logs y trazas).
-   En escritorio: Klavyra.exe (WinForms + WebView2) arranca la API y el worker en puertos locales.
+
+### Cómo se transcribe una canción (flujo del worker)
+
+```mermaid
+flowchart LR
+    in(["Audio<br/>o enlace"]) --> a["1 · Audio<br/>ffmpeg · yt-dlp"]
+    a --> n["2 · Notas<br/>ByteDance · MuScriptor"]
+    n --> r["3 · Ritmo<br/>Beat This!"]
+    r --> m["4 · Manos y partitura<br/>music21 · MuseScore"]
+    m --> out(["Teclas · partitura<br/>MIDI · MusicXML · PDF"])
+
+    classDef step fill:#0f1f1a,stroke:#2f7d6d,color:#f5f1e8
+    classDef edge fill:#e0b04f,stroke:#a77d2c,color:#1b1b1b
+    class a,n,r,m step
+    class in,out edge
 ```
+
+En desarrollo, .NET Aspire 13 levanta la web, la API y el worker con un solo comando y un panel con registros y trazas.
 
 1. **Audio.** ffmpeg normaliza el archivo; si es un enlace, yt-dlp lo descarga primero.
 2. **Notas.** Un modelo de IA (ByteDance Piano Transcription, o MuScriptor) detecta cada nota con su inicio, duración, intensidad y pedal.
