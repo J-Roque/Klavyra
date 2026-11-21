@@ -45,27 +45,61 @@ Funciona mejor con grabaciones de piano solo. Con otros instrumentos o con voz o
 
 ## Cómo funciona
 
+### Arquitectura (diagrama de contenedores C4)
+
 ```mermaid
 flowchart TB
-    in(["🎵 Subes un audio o pegas un enlace"]) --> web
+    user(["<b>Usuario</b><br/>sube un audio o pega un enlace"])
 
-    web["<b>Web</b> · Angular 21 + PrimeNG"]
-    api["<b>API</b> · ASP.NET Core 10<br/>cola de trabajos · SQLite · archivos"]
-    web <-->|"REST · progreso en vivo (SignalR)"| api
-    api <-->|"HTTP · progreso (SSE)"| worker
-
-    subgraph worker["Worker de IA en Python"]
-        direction LR
-        a["1 · Audio<br/>ffmpeg · yt-dlp"] --> n["2 · Notas<br/>ByteDance · MuScriptor"]
-        n --> r["3 · Ritmo<br/>Beat This!"]
-        r --> m["4 · Manos y partitura<br/>music21 · MuseScore"]
+    subgraph pc["Tu PC · Windows"]
+        desktop["<b>Lanzador</b><br/><i>WinForms + WebView2</i><br/>abre la ventana y arranca los servicios"]
+        web["<b>Aplicación web</b><br/><i>Angular 21 + PrimeNG</i><br/>teclas cayendo, partitura y reproductor"]
+        api["<b>API</b><br/><i>ASP.NET Core 10</i><br/>proyectos, cola de trabajos y archivos"]
+        db[("<b>Base de datos</b><br/><i>SQLite</i>")]
+        worker["<b>Worker de IA</b><br/><i>Python + FastAPI + PyTorch</i><br/>transcribe el audio a notas"]
     end
 
-    worker --> out(["🎹 Teclas cayendo · partitura · MIDI · MusicXML · PDF"])
+    sites["<b>YouTube, TikTok…</b><br/>origen de los enlaces"]
+    models["<b>Zenodo y Hugging Face</b><br/>modelos de IA, la primera vez"]
+
+    user -->|usa| desktop
+    desktop -->|muestra| web
+    desktop -.->|arranca| api
+    desktop -.->|arranca| worker
+    web <-->|"REST + SignalR"| api
+    api -->|"lee y escribe"| db
+    api <-->|"HTTP + SSE"| worker
+    worker -->|descarga audio| sites
+    worker -->|descarga modelos| models
+
+    classDef person fill:#2f7d6d,stroke:#1d5247,color:#ffffff
+    classDef app fill:#0f1f1a,stroke:#2f7d6d,color:#f5f1e8
+    classDef store fill:#e0b04f,stroke:#a77d2c,color:#1b1b1b
+    classDef ext fill:#8a8f8c,stroke:#5f6461,color:#ffffff
+    class user person
+    class desktop,web,api,worker app
+    class db store
+    class sites,models ext
+    style pc fill:transparent,stroke:#2f7d6d,stroke-dasharray:5 5
 ```
 
-En escritorio, `Klavyra.exe` (WinForms + WebView2) abre la web y arranca la API y el worker en tu equipo.
-En desarrollo, .NET Aspire 13 levanta lo mismo con un solo comando y un panel con registros y trazas.
+### Cómo se transcribe una canción (flujo del worker)
+
+```mermaid
+flowchart LR
+    in(["Audio<br/>o enlace"]) --> a["<b>1 · Audio</b><br/>ffmpeg · yt-dlp"]
+    a --> n["<b>2 · Notas</b><br/>ByteDance · MuScriptor"]
+    n --> r["<b>3 · Ritmo</b><br/>Beat This!"]
+    r --> m["<b>4 · Manos y partitura</b><br/>music21 · MuseScore"]
+    m --> out(["Teclas · partitura<br/>MIDI · MusicXML · PDF"])
+
+    classDef step fill:#0f1f1a,stroke:#2f7d6d,color:#f5f1e8
+    classDef edge fill:#e0b04f,stroke:#a77d2c,color:#1b1b1b
+    class a,n,r,m step
+    class in,out edge
+```
+
+En desarrollo, .NET Aspire 13 levanta la web, la API y el worker con un solo comando y un panel con registros y trazas.
 
 1. **Audio.** ffmpeg normaliza el archivo; si es un enlace, yt-dlp lo descarga primero.
 2. **Notas.** Un modelo de IA (ByteDance Piano Transcription, o MuScriptor) detecta cada nota con su inicio, duración, intensidad y pedal.
