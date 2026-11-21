@@ -1,17 +1,8 @@
 # Desarrollar Klavyra
 
-## Cómo está hecho
+## Estructura
 
-```
-Angular 21 + PrimeNG ──REST + SignalR──> ASP.NET Core 10 API ──HTTP + SSE──> Worker Python (FastAPI, GPU)
-                                          (Vertical Slices,                   ├ yt-dlp / ffmpeg
-                                           EF Core SQLite + migraciones,      ├ ByteDance piano | MuScriptor
-                                           cola de 1 trabajo, cancelable)     ├ Beat This! (tempo/compases)
-                                                                              ├ separación de manos + music21
-                                                                              └ MuseScore 4 → PDF
-   En desarrollo: .NET Aspire 13 (dashboard con logs y trazas).
-   En escritorio: Klavyra.exe (WinForms + WebView2) arranca la API y el worker en puertos locales.
-```
+La arquitectura y las decisiones técnicas están en el [README](README.md#cómo-funciona).
 
 | Carpeta | Contenido |
 |---|---|
@@ -22,17 +13,6 @@ Angular 21 + PrimeNG ──REST + SignalR──> ASP.NET Core 10 API ──HTTP 
 | `web/` | Angular 21 + PrimeNG 21 + PrimeIcons 7 + Tailwind 4 (`tailwindcss-primeui`) |
 | `desktop/` | `build.ps1` y el instalador de Inno Setup (`klavyra.iss`) |
 | `tests/` | Pruebas de la API y del lanzador (xUnit) |
-
-Algunas decisiones:
-
-- **Nada sale del PC.** La API y el worker solo escuchan en `127.0.0.1`; el lanzador elige puertos libres y cierra
-  los procesos hijos con un *Job Object* de Windows aunque la ventana se cierre de golpe.
-- **Instalador pequeño (~110 MB).** PyTorch (~2.5 GB) no va dentro: el lanzador crea el entorno con `uv` la primera
-  vez y muestra el avance de la descarga.
-- **Progreso en vivo.** El worker emite eventos por SSE, la API los guarda y los reenvía por SignalR; al reconectar,
-  la web vuelve a pedir el estado para no quedarse con datos viejos.
-- **Datos que sobreviven a las actualizaciones.** Migraciones de EF Core (las bases antiguas se adoptan con copia de
-  seguridad) y SQLite en modo WAL para que la API y el worker no se bloqueen.
 
 ## Requisitos (una sola vez)
 
