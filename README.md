@@ -49,18 +49,18 @@ Funciona mejor con grabaciones de piano solo. Con otros instrumentos o con voz o
 
 ```mermaid
 flowchart TB
-    user(["<b>Usuario</b><br/>sube un audio o pega un enlace"])
+    user(["Usuario<br/>sube un audio o pega un enlace"])
 
     subgraph pc["Tu PC · Windows"]
-        desktop["<b>Lanzador</b><br/><i>WinForms + WebView2</i><br/>abre la ventana y arranca los servicios"]
-        web["<b>Aplicación web</b><br/><i>Angular 21 + PrimeNG</i><br/>teclas cayendo, partitura y reproductor"]
-        api["<b>API</b><br/><i>ASP.NET Core 10</i><br/>proyectos, cola de trabajos y archivos"]
-        db[("<b>Base de datos</b><br/><i>SQLite</i>")]
-        worker["<b>Worker de IA</b><br/><i>Python + FastAPI + PyTorch</i><br/>transcribe el audio a notas"]
+        desktop["Lanzador<br/>WinForms + WebView2<br/>abre la ventana y arranca los servicios"]
+        web["Aplicación web<br/>Angular 21 + PrimeNG<br/>teclas cayendo, partitura y reproductor"]
+        api["API<br/>ASP.NET Core 10<br/>proyectos, cola de trabajos y archivos"]
+        db[("Base de datos<br/>SQLite")]
+        worker["Worker de IA<br/>Python + FastAPI + PyTorch<br/>transcribe el audio a notas"]
     end
 
-    sites["<b>YouTube, TikTok…</b><br/>origen de los enlaces"]
-    models["<b>Zenodo y Hugging Face</b><br/>modelos de IA, la primera vez"]
+    sites["YouTube, TikTok…<br/>origen de los enlaces"]
+    models["Zenodo y Hugging Face<br/>modelos de IA, la primera vez"]
 
     user -->|usa| desktop
     desktop -->|muestra| web
@@ -87,10 +87,10 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    in(["Audio<br/>o enlace"]) --> a["<b>1 · Audio</b><br/>ffmpeg · yt-dlp"]
-    a --> n["<b>2 · Notas</b><br/>ByteDance · MuScriptor"]
-    n --> r["<b>3 · Ritmo</b><br/>Beat This!"]
-    r --> m["<b>4 · Manos y partitura</b><br/>music21 · MuseScore"]
+    in(["Audio<br/>o enlace"]) --> a["1 · Audio<br/>ffmpeg · yt-dlp"]
+    a --> n["2 · Notas<br/>ByteDance · MuScriptor"]
+    n --> r["3 · Ritmo<br/>Beat This!"]
+    r --> m["4 · Manos y partitura<br/>music21 · MuseScore"]
     m --> out(["Teclas · partitura<br/>MIDI · MusicXML · PDF"])
 
     classDef step fill:#0f1f1a,stroke:#2f7d6d,color:#f5f1e8
