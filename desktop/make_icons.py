@@ -2,7 +2,7 @@
 
 Writes:
   src/Klavyra.Desktop/Klavyra.ico      window, taskbar, Klavyra.exe and the installer
-  src/Klavyra.Desktop/splash-logo.png  the mark on the startup screen (transparent)
+  src/Klavyra.Desktop/splash-logo.png  the mark on the dark startup screen (transparent)
   web/public/favicon.ico               the browser tab while developing
 Run from the repository root:  worker\\.venv\\Scripts\\python.exe -I desktop\\make_icons.py
 """
@@ -19,15 +19,14 @@ SCALE = 32  # the logo's viewBox is 32 x 32
 SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 
 
-def mark(px: int, bars=PAPER) -> Image.Image:
-    """The mark alone on a transparent square, drawn large and scaled down so small sizes stay smooth.
-    The bars are light on the dark icon and dark on the light startup screen."""
+def mark(px: int) -> Image.Image:
+    """The mark alone on a transparent square, drawn large and scaled down so small sizes stay smooth."""
     big = px * 4
     k = big / SCALE
     image = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     for x, y, h, alpha in ((2, 13, 8, 0.55), (8, 8, 18, 0.75), (14, 11, 11, 0.55)):
-        draw.rounded_rectangle([x * k, y * k, (x + 3) * k, (y + h) * k], radius=1.5 * k, fill=bars + (round(255 * alpha),))
+        draw.rounded_rectangle([x * k, y * k, (x + 3) * k, (y + h) * k], radius=1.5 * k, fill=PAPER + (round(255 * alpha),))
     draw.rounded_rectangle([23.5 * k, 3 * k, 26.5 * k, 25 * k], radius=1.5 * k, fill=BRASS + (255,))
     # The note head: an ellipse rotated -20 degrees around (21.7, 25).
     head = Image.new("RGBA", image.size, (0, 0, 0, 0))
@@ -54,7 +53,7 @@ def main() -> None:
         icons[-1].save(target, format="ICO", sizes=[(s, s) for s in SIZES], append_images=icons[:-1])
         print("escrito", target)
     splash = ROOT / "src/Klavyra.Desktop/splash-logo.png"
-    mark(192, bars=INK).save(splash)
+    mark(192).save(splash)
     print("escrito", splash)
 
 

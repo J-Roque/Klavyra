@@ -15,8 +15,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Klavyra.Desktop.Tests" />
-    <EmbeddedResource Include="splash-logo.png" LogicalName="splash-logo.png" />
-  </ItemGroup>
+    <EmbeddedResource Include="splash-logo.png" LogicalName="splash-logo.png" />  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />

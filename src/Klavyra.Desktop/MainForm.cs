@@ -7,14 +7,14 @@ namespace Klavyra.Desktop;
 /// <summary>Shows the animated startup screen while the services start, then the Klavyra web app inside the window.</summary>
 internal sealed class MainForm : Form
 {
-    private static readonly Color Background = SplashView.Paper;
+    private static readonly Color Background = SplashView.Background;
 
     private readonly AppPaths _paths;
     private ServiceHost _host;
     private Uri? _app;
     private bool _updateChecked;
     private readonly CancellationTokenSource _closing = new();
-    private readonly WebView2 _web = new() { Dock = DockStyle.Fill, Visible = false, DefaultBackgroundColor = Background };
+    private readonly WebView2 _web = new() { Dock = DockStyle.Fill, Visible = false, DefaultBackgroundColor = SplashView.Paper };
     private readonly Panel _splash = new() { Dock = DockStyle.Fill, BackColor = Background };
     private readonly SplashView _status = new() { Dock = DockStyle.Fill };
     private readonly Button _openLogs = new() { Text = "Abrir carpeta de registros", AutoSize = true, Visible = false };
@@ -32,7 +32,11 @@ internal sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Background;
 
-        var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(16) };
+        // Inside the startup screen and transparent, so the buttons sit on its background instead of a flat strip.
+        var bottom = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom, Height = 64, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(16), BackColor = Color.Transparent,
+        };
         _openLogs.Click += (_, _) => OpenExternal(_paths.Logs);
         _retry.Click += async (_, _) => await StartAsync();
         foreach (var button in new[] { _retry, _openLogs })
@@ -41,8 +45,8 @@ internal sealed class MainForm : Form
             button.BackColor = Color.White;
             bottom.Controls.Add(button);
         }
+        _status.Controls.Add(bottom);
         _splash.Controls.Add(_status);
-        _splash.Controls.Add(bottom);
         Controls.Add(_web);
         Controls.Add(_splash);
     }
