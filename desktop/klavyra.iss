@@ -16,6 +16,7 @@ AppName=Klavyra
 AppVersion={#AppVersion}
 AppVerName=Klavyra {#AppVersion}
 AppPublisher=Johel Roque
+AppCopyright=© 2026 Johel Roque
 AppPublisherURL=https://github.com/J-Roque/Klavyra
 AppSupportURL=https://github.com/J-Roque/Klavyra/issues
 AppUpdatesURL=https://github.com/J-Roque/Klavyra/releases
