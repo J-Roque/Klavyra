@@ -8,13 +8,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Klavyra</AssemblyName>
     <RootNamespace>Klavyra.Desktop</RootNamespace>
-    <ApplicationIcon>..\..\web\public\favicon.ico</ApplicationIcon>
+    <!-- Klavyra.ico and splash-logo.png come from desktop\make_icons.py. -->
+    <ApplicationIcon>Klavyra.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Klavyra.Desktop.Tests" />
-  </ItemGroup>
+    <EmbeddedResource Include="splash-logo.png" LogicalName="splash-logo.png" />  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />

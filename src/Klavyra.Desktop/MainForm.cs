@@ -4,25 +4,19 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace Klavyra.Desktop;
 
-/// <summary>Shows "Iniciando…" while the services start, then the Klavyra web app inside the window.</summary>
+/// <summary>Shows the animated startup screen while the services start, then the Klavyra web app inside the window.</summary>
 internal sealed class MainForm : Form
 {
-    private static readonly Color Background = Color.FromArgb(20, 26, 24);
+    private static readonly Color Background = SplashView.Background;
 
     private readonly AppPaths _paths;
     private ServiceHost _host;
     private Uri? _app;
     private bool _updateChecked;
     private readonly CancellationTokenSource _closing = new();
-    private readonly WebView2 _web = new() { Dock = DockStyle.Fill, Visible = false, DefaultBackgroundColor = Background };
+    private readonly WebView2 _web = new() { Dock = DockStyle.Fill, Visible = false, DefaultBackgroundColor = SplashView.Paper };
     private readonly Panel _splash = new() { Dock = DockStyle.Fill, BackColor = Background };
-    private readonly Label _status = new()
-    {
-        Dock = DockStyle.Fill,
-        ForeColor = Color.Gainsboro,
-        Font = new Font("Segoe UI", 12f),
-        TextAlign = ContentAlignment.MiddleCenter,
-    };
+    private readonly SplashView _status = new() { Dock = DockStyle.Fill };
     private readonly Button _openLogs = new() { Text = "Abrir carpeta de registros", AutoSize = true, Visible = false };
     private readonly Button _retry = new() { Text = "Reintentar", AutoSize = true, Visible = false };
 
@@ -38,17 +32,21 @@ internal sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Background;
 
-        var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(16) };
+        // Inside the startup screen and transparent, so the buttons sit on its background instead of a flat strip.
+        var bottom = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom, Height = 64, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(16), BackColor = Color.Transparent,
+        };
         _openLogs.Click += (_, _) => OpenExternal(_paths.Logs);
         _retry.Click += async (_, _) => await StartAsync();
         foreach (var button in new[] { _retry, _openLogs })
         {
             button.ForeColor = Color.Black;
-            button.BackColor = Color.Gainsboro;
+            button.BackColor = Color.White;
             bottom.Controls.Add(button);
         }
+        _status.Controls.Add(bottom);
         _splash.Controls.Add(_status);
-        _splash.Controls.Add(bottom);
         Controls.Add(_web);
         Controls.Add(_splash);
     }
@@ -63,14 +61,13 @@ internal sealed class MainForm : Form
     {
         _retry.Visible = false;
         _openLogs.Visible = false;
-        _status.ForeColor = Color.Gainsboro;
-        _status.Text = "Iniciando Klavyra…";
+        _status.ShowStatus("Iniciando Klavyra…");
         // A retry starts from a clean slate: whatever the failed attempt left running is stopped first.
         _host.Dispose();
         _host = new ServiceHost(_paths);
         try
         {
-            await _host.StartAsync(new Progress<string>(text => _status.Text = text), _closing.Token);
+            await _host.StartAsync(new Progress<string>(text => _status.ShowStatus(text)), _closing.Token);
             _app = _host.AppUri!;
             if (_web.CoreWebView2 is null)
             {
@@ -142,8 +139,7 @@ internal sealed class MainForm : Form
 
     private void ShowError(string message)
     {
-        _status.Text = message;
-        _status.ForeColor = Color.FromArgb(255, 170, 160);
+        _status.ShowStatus(message, isError: true);
         _openLogs.Visible = true;
         _retry.Visible = true;
     }
