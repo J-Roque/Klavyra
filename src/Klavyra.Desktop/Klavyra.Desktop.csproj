@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Klavyra</AssemblyName>
+    <RootNamespace>Klavyra.Desktop</RootNamespace>
+    <!-- Klavyra.ico and splash-logo.png come from desktop\make_icons.py. -->
+    <ApplicationIcon>Klavyra.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Klavyra.Desktop.Tests" />
+    <EmbeddedResource Include="splash-logo.png" LogicalName="splash-logo.png" />  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
+</Project>

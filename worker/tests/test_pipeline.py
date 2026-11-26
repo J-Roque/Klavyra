@@ -1,12 +1,17 @@
 from pathlib import Path
 
 import mido
+import pytest
 
-from klavyra_worker.engines.muscriptor_engine import read_piano_notes
+from klavyra_worker.engines.bytedance import CHECKPOINT_NAME, checkpoint_path
+from klavyra_worker.engines.download import DownloadMeter, download_message
+from klavyra_worker.engines.muscriptor_engine import explain_failure, read_piano_notes
+from klavyra_worker.job import _reporting
 from klavyra_worker.models import BeatGrid, Note, Transcription
 from klavyra_worker.pipeline import notation
 from klavyra_worker.pipeline.hands import split_hands
 
+GB = 1024 ** 3
 BEAT = 0.5  # 120 BPM
 GRID = BeatGrid(beats=[i * BEAT for i in range(64)], downbeats=[i * BEAT for i in range(0, 64, 4)])
 
@@ -114,6 +119,55 @@ def test_note_outside_the_key_gets_its_accidental(tmp_path: Path):
     assert "<accidental>natural</accidental>" in xml.read_text(encoding="utf-8")
 
 
+def test_download_message_shows_amount_speed_and_time_left():
+    percent, message = download_message("Large", 2 * GB, 4 * GB, 10 * 1024 ** 2)
+    assert percent == 50
+    assert message == "Descargando modelo Large: 2.00 de 4.00 GB · 10.0 MB/s · faltan unos 3 min"
+    assert download_message("Large", GB, None, 0) == (0, "Descargando modelo Large: 1.00 GB")
+
+
+def test_download_meter_limits_updates_and_warns_when_stalled():
+    now = [0.0]
+    events = []
+    meter = DownloadMeter("Large", 4 * GB, lambda *event: events.append(event), clock=lambda: now[0])
+    meter.update(GB)  # too soon after the start
+    assert events == []
+    now[0] = 2.0
+    meter.update(GB)
+    assert "512.0 MB/s" in events[-1][2]
+    now[0] = 122.0
+    meter.update(GB)
+    assert events[-1][0] == "downloading"
+    assert "sin avance desde hace 2 min" in events[-1][2]
+
+
+def test_muscriptor_failures_are_explained():
+    wrapped = "RuntimeError: Attempted to access the data pointer on an invalid python \nstorage."
+    assert "falta de memoria" in explain_failure("Large", wrapped)
+    paging = "OSError: El archivo de paginación es demasiado pequeño para completar la operación. (os error 1455)"
+    assert "falta de memoria" in explain_failure("Large", paging)
+    assert "muscriptor-large" in explain_failure("Large", "1. Accept the model license at https://huggingface.co")
+    assert explain_failure("Small", "otro error") == "MuScriptor falló: otro error"
+
+
+def test_reporting_yields_progress_and_returns_or_raises():
+    def work(report):
+        report("downloading", 50, "Descargando")
+        return Transcription([])
+
+    runner = _reporting(work)
+    assert next(runner).message == "Descargando"
+    with pytest.raises(StopIteration) as stop:
+        next(runner)
+    assert stop.value.value.notes == []
+
+    def broken(_):
+        raise ValueError("sin memoria")
+
+    with pytest.raises(ValueError, match="sin memoria"):
+        list(_reporting(broken))
+
+
 def test_read_piano_notes_honours_tempo_map_and_skips_drums(tmp_path: Path):
     mid = mido.MidiFile(ticks_per_beat=480)
     meta = mido.MidiTrack([mido.MetaMessage("set_tempo", tempo=1_000_000, time=0)])  # 60 BPM
@@ -131,3 +185,246 @@ def test_read_piano_notes_honours_tempo_map_and_skips_drums(tmp_path: Path):
     mid.save(str(path))
     notes = read_piano_notes(path)
     assert [(x.pitch, round(x.onset, 3), round(x.offset, 3)) for x in notes] == [(60, 1.0, 2.0)]
+
+
+def test_bytedance_checkpoint_follows_the_models_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("KLAVYRA_MODELS", raising=False)
+    assert checkpoint_path() == Path.home() / "piano_transcription_inference_data" / CHECKPOINT_NAME
+    monkeypatch.setenv("KLAVYRA_MODELS", str(tmp_path))
+    assert checkpoint_path() == tmp_path / "bytedance" / CHECKPOINT_NAME
+
+
+def _response(status: int):
+    import httpx
+
+    return httpx.Response(status, request=httpx.Request("GET", "https://huggingface.co/api"))
+
+
+class FakeHub:
+    """Stands in for huggingface_hub.HfApi: one valid token with access to small only."""
+
+    def __init__(self, valid: str = "hf_bueno"):
+        self.valid = valid
+
+    def whoami(self, token=None):
+        from huggingface_hub.errors import HfHubHTTPError
+
+        if token != self.valid:
+            raise HfHubHTTPError("401 Unauthorized", response=_response(401))
+        return {"name": "johel"}
+
+    def auth_check(self, repo_id, token=None):
+        from huggingface_hub.errors import GatedRepoError
+
+        if not repo_id.endswith("small"):
+            raise GatedRepoError("acepta la licencia", response=_response(403))
+
+
+def test_hugging_face_token_is_checked_saved_and_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import settings
+
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setattr(settings, "token_path", lambda: tmp_path / "hf" / "token")
+    hub = FakeHub()
+
+    assert not settings.has_token()
+    with pytest.raises(settings.TokenError) as bad:
+        settings.save("hf_malo", hub)
+    assert bad.value.status == 400 and not settings.has_token()
+
+    result = settings.save("  hf_bueno\n", hub)
+    assert result == {"user": "johel", "access": {"small": True, "medium": False, "large": False}}
+    assert (tmp_path / "hf" / "token").read_text() == "hf_bueno"
+    assert settings.status(hub)["user"] == "johel"
+
+    settings.remove()
+    assert not settings.has_token()
+    with pytest.raises(settings.TokenError) as missing:
+        settings.status(hub)
+    assert missing.value.status == 404
+
+
+def test_errors_are_explained_in_plain_words():
+    from yt_dlp.utils import DownloadError
+
+    from klavyra_worker.errors import CANCELLED, JobCancelled, UserError, explain
+
+    assert "privado" in explain(DownloadError("ERROR: [youtube] abc: Private video. Sign in if you've been granted access"))
+    assert "ya no está disponible" in explain(DownloadError("ERROR: [youtube] abc: Video unavailable"))
+    assert "ya no está disponible" in explain(DownloadError("ERROR: [youtube] abc: This video is unavailable"))
+    assert "conexión a internet" in explain(DownloadError("ERROR: Unable to download webpage: <urlopen error [Errno 11001] getaddrinfo failed>"))
+    assert "actualiza el descargador" in explain(DownloadError("ERROR: [youtube] abc: nsig extraction failed")).lower()
+    assert "no sabe descargar" in explain(DownloadError("ERROR: Unsupported URL: https://example.com"))
+    assert "Detalle: algo raro" in explain(DownloadError("ERROR: algo raro"))
+    assert "sin memoria" in explain(RuntimeError("CUDA out of memory. Tried to allocate 2 GiB"))
+    assert "No se pudo leer el audio" in explain(RuntimeError("ffmpeg falló: Invalid data found when processing input"))
+    assert explain(RuntimeError("No se detectaron notas de piano en el audio")) == "No se detectaron notas de piano en el audio"
+    assert explain(UserError("demasiado largo")) == "demasiado largo"
+    assert explain(JobCancelled()) == CANCELLED
+    assert explain(KeyError("x")) == "KeyError: 'x'"
+
+
+def test_audio_longer_than_the_limit_is_rejected():
+    from klavyra_worker.errors import UserError
+    from klavyra_worker.pipeline import fetch
+
+    fetch.check_duration(None)
+    fetch.check_duration(fetch.MAX_MINUTES * 60)
+    with pytest.raises(UserError, match="dura 45 minutos"):
+        fetch.check_duration(45 * 60)
+
+
+def test_link_download_message_moves_the_bar_from_5_to_15():
+    from klavyra_worker.pipeline.fetch import download_message
+
+    assert download_message(0, None) == (5, "Descargando audio: 0.0 MB")
+    assert download_message(5 * 1024 ** 2, 10 * 1024 ** 2) == (10, "Descargando audio: 5.0 de 10.0 MB")
+    assert download_message(10 * 1024 ** 2, 10 * 1024 ** 2)[0] == 15
+
+
+def test_a_cancelled_job_stops_at_its_next_report():
+    import threading
+
+    from klavyra_worker.errors import JobCancelled
+
+    cancelled = threading.Event()
+    reached = []
+
+    def work(report):
+        report("downloading", 10, "uno")
+        cancelled.set()
+        report("downloading", 20, "dos")
+        reached.append("after")
+
+    runner = _reporting(work, cancelled)
+    assert next(runner).message == "uno"
+    with pytest.raises(JobCancelled):
+        next(runner)
+    assert reached == []
+
+
+def _fake_download(title: str):
+    def download_url(url, out_dir, report, cancelled, on_title=lambda t: None):
+        on_title(title)
+        report("downloading", 10, "Descargando audio: 1.0 de 2.0 MB")
+        raise RuntimeError("alto aquí")
+
+    return download_url
+
+
+def test_job_reports_the_video_title_and_a_clear_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import job
+    from klavyra_worker.pipeline import fetch
+
+    monkeypatch.setattr(fetch, "download_url", _fake_download("Für Elise"))
+    events = list(job.run_job(job.JobRequest(tmp_path, url="https://example.com/v", job_id="j1")))
+    assert [e.title for e in events[:3]] == [None, "Für Elise", None]
+    assert events[2].message == "Descargando audio: 1.0 de 2.0 MB"
+    assert events[-1].stage == "failed" and events[-1].error == "alto aquí"
+    assert "j1" not in job._running
+
+
+def test_job_cancelled_while_running_ends_as_cancelled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import job
+    from klavyra_worker.errors import CANCELLED
+    from klavyra_worker.pipeline import fetch
+
+    assert job.cancel("unknown") is False  # nothing to stop, and nothing remembered for later
+
+    def download_url(url, out_dir, report, cancelled, on_title=lambda t: None):
+        assert job.cancel("late") is True
+        report("downloading", 10, "no llega")
+
+    monkeypatch.setattr(fetch, "download_url", download_url)
+    events = list(job.run_job(job.JobRequest(tmp_path, url="https://example.com/v", job_id="late")))
+    assert events[-1].error == CANCELLED
+    assert not job.is_busy()
+
+
+def test_downloader_update_runs_uv_against_this_python(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import subprocess
+    import sys
+
+    from klavyra_worker import settings
+
+    uv = tmp_path / "uv.exe"
+    uv.write_bytes(b"")
+    monkeypatch.setenv("KLAVYRA_UV", str(uv))
+    calls = []
+
+    def run(cmd, **_):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    result = settings.update_downloader(run)
+    assert calls == [[str(uv), "pip", "install", "--upgrade", "yt-dlp", "--python", sys.executable]]
+    assert result["before"] == result["after"] == settings.downloader_version() and result["updated"] is False
+
+    def broken(cmd, **_):
+        return subprocess.CompletedProcess(cmd, 1, "", "error: sin red")
+
+    with pytest.raises(settings.TokenError, match="sin red") as failed:
+        settings.update_downloader(broken)
+    assert failed.value.status == 502
+
+
+def test_a_hung_or_missing_musescore_only_means_no_pdf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import subprocess
+
+    from klavyra_worker.pipeline import pdf
+
+    xml, out = tmp_path / "score.musicxml", tmp_path / "score.pdf"
+    xml.write_text("<score/>")
+    monkeypatch.setattr(pdf, "musescore_exe", lambda: None)
+    assert pdf.render_pdf(xml, out) is False
+
+    monkeypatch.setattr(pdf, "musescore_exe", lambda: "MuseScore4.exe")
+
+    def hangs(cmd, **_):
+        out.write_bytes(b"%PDF half written")
+        raise subprocess.TimeoutExpired(cmd, 300)
+
+    monkeypatch.setattr(pdf.subprocess, "run", hangs)
+    assert pdf.render_pdf(xml, out) is False
+    assert not out.exists()  # no broken PDF is left to be offered for download
+
+    def missing(cmd, **_):
+        raise FileNotFoundError(cmd[0])
+
+    monkeypatch.setattr(pdf.subprocess, "run", missing)
+    assert pdf.render_pdf(xml, out) is False
+
+    monkeypatch.setattr(pdf.subprocess, "run", lambda cmd, **_: subprocess.CompletedProcess(cmd, 0, b"", b""))
+    out.write_bytes(b"%PDF ok")
+    assert pdf.render_pdf(xml, out) is True
+
+
+def test_a_job_whose_pdf_fails_still_finishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from klavyra_worker import job
+    from klavyra_worker.models import BeatGrid, Transcription
+    from klavyra_worker.pipeline import fetch, pdf
+
+    wav = tmp_path / "input.wav"
+    monkeypatch.setattr(fetch, "normalize", lambda *a, **k: (wav, tmp_path / "playback.mp3"))
+    monkeypatch.setattr(job, "_duration", lambda _: 4.0)
+    monkeypatch.setattr(job, "track_beats", lambda _: GRID)
+    notes = [n(i * BEAT, 72 + i) for i in range(8)]
+
+    class Engine:
+        def transcribe(self, wav, out, report):
+            return Transcription(notes)
+
+    monkeypatch.setattr(job, "get_engine", lambda *a, **k: Engine())
+    monkeypatch.setattr(pdf, "musescore_exe", lambda: "MuseScore4.exe")
+
+    def hangs(cmd, **_):
+        import subprocess
+
+        raise subprocess.TimeoutExpired(cmd, 300)
+
+    monkeypatch.setattr(pdf.subprocess, "run", hangs)
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"x")
+    events = list(job.run_job(job.JobRequest(tmp_path, file=source, job_id="pdf")))
+    last = events[-1]
+    assert last.stage == "done" and "pdf" not in last.files and {"notes", "midi", "musicxml"} <= set(last.files)

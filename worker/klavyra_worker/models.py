@@ -59,6 +59,7 @@ class ProgressEvent:
     message: str = ""
     files: dict[str, str] | None = None
     error: str | None = None
+    title: str | None = None  # the real title of a downloaded video
 
     def to_dict(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None}

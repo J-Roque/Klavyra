@@ -10,6 +10,8 @@ public static class ProjectEndpoints
         GetProject.Map(group);
         DownloadFile.Map(group);
         DeleteProject.Map(group);
+        RetryProject.Map(group);
+        CancelProject.Map(group);
         return app;
     }
 }

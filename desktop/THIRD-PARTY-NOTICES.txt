@@ -1,0 +1,80 @@
+Klavyra - third-party notices
+==============================
+
+Klavyra is free software under the GNU Affero General Public License v3.0 (see LICENSE.txt).
+Source code: https://github.com/J-Roque/Klavyra
+
+This file lists the third-party software and content that Klavyra includes or downloads,
+and the license each one is distributed under.
+
+
+1. Included in this installer
+-----------------------------
+
+FFmpeg 9.0.2 ("essentials" build by Gyan Doshi)          tools\ffmpeg.exe
+  License: GNU General Public License v3.0 (this build enables GPL components).
+  The full license text is in tools\ffmpeg-LICENSE.txt.
+  FFmpeg source code: https://ffmpeg.org/download.html
+  Build and its source configuration: https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2
+  Klavyra runs ffmpeg.exe as a separate program to read audio and video files; it is not linked into Klavyra.
+
+uv (Astral Software Inc.)                                 tools\uv.exe
+  License: MIT or Apache-2.0. https://github.com/astral-sh/uv
+
+.NET runtime and ASP.NET Core (Microsoft and the .NET Foundation)
+  License: MIT. https://github.com/dotnet/runtime  https://github.com/dotnet/aspnetcore
+
+Entity Framework Core and Microsoft.Data.Sqlite (Microsoft)
+  License: MIT. https://github.com/dotnet/efcore
+SQLite
+  Public domain. https://sqlite.org/copyright.html
+
+Microsoft Edge WebView2 SDK (Microsoft)
+  License: BSD-3-Clause style license from Microsoft. https://www.nuget.org/packages/Microsoft.Web.WebView2
+  The WebView2 Runtime itself is part of Windows and is not included.
+
+Scalar.AspNetCore
+  License: MIT. https://github.com/scalar/scalar
+
+Web interface libraries (bundled into the compiled web app)
+  Angular                       MIT            https://github.com/angular/angular
+  PrimeNG, PrimeIcons, PrimeUIX MIT            https://github.com/primefaces/primeng
+  RxJS                          Apache-2.0     https://github.com/ReactiveX/rxjs
+  OpenSheetMusicDisplay         BSD-3-Clause   https://github.com/opensheetmusicdisplay/opensheetmusicdisplay
+  VexFlow (used by OSMD)        MIT            https://github.com/0xfe/vexflow
+  Tone.js                       MIT            https://github.com/Tonejs/Tone.js
+  Microsoft SignalR client      MIT            https://github.com/dotnet/aspnetcore
+  Fraunces and Manrope fonts    SIL Open Font License 1.1 (via Fontsource)
+
+Salamander Grand Piano samples (Alexander Holm)           api\wwwroot\audio\salamander
+  License: Creative Commons Attribution 3.0 (CC BY 3.0).
+  https://archive.org/details/SalamanderGrandPianoV3
+  The MP3 files are the versions published with Tone.js (https://tonejs.github.io/audio/salamander/).
+
+
+2. Downloaded on your PC the first time Klavyra opens
+-----------------------------------------------------
+
+Klavyra does not include these; uv downloads them from their official sources into
+%LOCALAPPDATA%\Klavyra\python, each under its own license:
+
+  Python 3.12 (python-build-standalone)  PSF License        https://www.python.org
+  PyTorch (CUDA 12.8 build)              BSD-3-Clause       https://pytorch.org  (includes NVIDIA CUDA libraries under the NVIDIA license)
+  FastAPI, Uvicorn, yt-dlp, mido, music21, soundfile and their dependencies,
+  each under its own open-source license (listed in the "licenses" folders of the installed packages).
+
+
+3. AI models downloaded when you first use them
+-----------------------------------------------
+
+Models are downloaded to %LOCALAPPDATA%\Klavyra\models from their authors and are not part of Klavyra:
+
+  ByteDance piano transcription (High-resolution Piano Transcription)
+    https://github.com/bytedance/piano_transcription
+  Beat This! (CPJKU, Johannes Kepler University Linz)
+    https://github.com/CPJKU/beat_this
+  MuScriptor (small, medium and large)
+    https://huggingface.co/MuScriptor
+    Gated models: you accept their license on Hugging Face with your own account before downloading.
+
+Check each project's page for the license of its code and weights before using the results commercially.

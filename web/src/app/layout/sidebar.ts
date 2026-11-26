@@ -32,6 +32,16 @@ import { Logo } from './logo';
         </a>
       </nav>
       <div class="flex-1"></div>
+      <a
+        routerLink="/settings"
+        aria-label="Ajustes"
+        pTooltip="Ajustes"
+        tooltipPosition="right"
+        routerLinkActive="!bg-white/10 !text-white"
+        class="flex items-center justify-center size-11 mx-auto mb-3 rounded-xl text-surface-300 no-underline hover:bg-white/5"
+      >
+        <i class="pi pi-cog"></i>
+      </a>
     } @else {
       <div class="flex items-center gap-2.5 pl-5 pr-3 pt-5 pb-5 shrink-0">
         <a routerLink="/" class="flex items-center gap-2.5 no-underline text-surface-0 mr-auto">
@@ -78,6 +88,13 @@ import { Logo } from './logo';
           <span class="px-3 py-2 text-sm text-surface-400">Tu repertorio está vacío</span>
         }
       </div>
+      <a
+        routerLink="/settings"
+        routerLinkActive="!bg-white/10 !text-white"
+        class="flex items-center gap-3 h-10 mx-3 my-2 px-3 rounded-lg text-sm font-semibold text-surface-200 no-underline hover:bg-white/5 shrink-0"
+      >
+        <i class="pi pi-cog text-sm"></i>Ajustes
+      </a>
     }
     <div aria-hidden="true" class="k-keys h-9 shrink-0 opacity-90"></div>
   `,

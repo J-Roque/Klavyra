@@ -1,0 +1,13 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Klavyra's version, shared by the API (Ajustes > Acerca de), the launcher and the installer (desktop\build.ps1). -->
+    <Version>0.1.0</Version>
+    <!-- Shown in Klavyra.exe's file properties (Details) and in Task Manager. -->
+    <Authors>Johel Roque</Authors>
+    <Company>Johel Roque</Company>
+    <Product>Klavyra</Product>
+    <Copyright>© 2026 Johel Roque. Licencia GNU AGPL-3.0.</Copyright>
+  </PropertyGroup>
+
+</Project>

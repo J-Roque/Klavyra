@@ -1,0 +1,165 @@
+<section class="mx-auto max-w-3xl px-4 sm:px-6 py-8 flex flex-col gap-6">
+  <h1 class="k-display text-4xl font-normal m-0">Ajustes</h1>
+
+  @if (loadFailed()) {
+    <p-message severity="error" text="No se pudo contactar con Klavyra." />
+  }
+
+  <!-- This PC -->
+  <article class="rounded-2xl bg-surface-0 border border-surface-200 p-5 flex flex-col gap-4">
+    <h2 class="k-display text-2xl font-normal m-0">Tu equipo</h2>
+    @if (settings(); as s) {
+      @if (!s.workerOnline || !s.worker) {
+        <p-message severity="warn" text="El motor de transcripción todavía no responde. Espera un momento y vuelve a cargar." />
+        <div><p-button label="Volver a cargar" icon="pi pi-refresh" severity="secondary" [outlined]="true" size="small" (onClick)="load()" /></div>
+      } @else {
+        <ul class="list-none m-0 p-0 flex flex-col gap-3 text-sm">
+          <li class="flex items-start gap-3">
+            <i class="pi mt-0.5" [class]="s.worker.cuda ? 'pi-check-circle text-green-600' : 'pi-info-circle text-amber-600'"></i>
+            <div>
+              <div class="font-semibold">Tarjeta gráfica</div>
+              <div class="text-muted-color">
+                {{ s.worker.cuda ? s.worker.gpu : 'No hay GPU NVIDIA: se usa el procesador. ByteDance funciona, pero tarda más; MuScriptor necesita GPU.' }}
+              </div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <i class="pi mt-0.5" [class]="s.worker.ffmpeg ? 'pi-check-circle text-green-600' : 'pi-times-circle text-red-600'"></i>
+            <div>
+              <div class="font-semibold">ffmpeg (lee el audio y el vídeo)</div>
+              <div class="text-muted-color">{{ s.worker.ffmpeg ? 'Listo' : 'No se encontró: no se puede transcribir. Reinstala Klavyra.' }}</div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <i class="pi mt-0.5" [class]="s.worker.musescore ? 'pi-check-circle text-green-600' : 'pi-info-circle text-amber-600'"></i>
+            <div>
+              <div class="font-semibold">MuseScore 4 (partitura en PDF)</div>
+              <div class="text-muted-color">
+                @if (s.worker.musescore) {
+                  Listo
+                } @else {
+                  Opcional. Sin él no se genera el PDF; la partitura se ve igual en Klavyra.
+                  <a href="https://musescore.org/es/download" target="_blank" rel="noopener" class="text-primary font-semibold">Descargar MuseScore</a>
+                }
+              </div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <i class="pi pi-link mt-0.5 text-muted-color"></i>
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold">Descargador de enlaces (YouTube, TikTok…)</div>
+              <div class="text-muted-color">
+                Versión {{ s.worker.downloader ?? 'desconocida' }}. Si un enlace que funciona en tu navegador falla en Klavyra, actualízalo: los sitios de vídeo cambian a menudo.
+              </div>
+              @if (downloaderError(); as error) {
+                <p-message class="block mt-2" severity="error" [text]="error" />
+              }
+            </div>
+            <p-button label="Actualizar" icon="pi pi-sync" severity="secondary" [outlined]="true" size="small" [loading]="updatingDownloader()" (onClick)="updateDownloader()" />
+          </li>
+        </ul>
+      }
+    } @else if (!loadFailed()) {
+      <p-skeleton height="6rem" />
+    }
+  </article>
+
+  <!-- MuScriptor / Hugging Face -->
+  <article class="rounded-2xl bg-surface-0 border border-surface-200 p-5 flex flex-col gap-4">
+    <div>
+      <h2 class="k-display text-2xl font-normal m-0">MuScriptor</h2>
+      <p class="m-0 mt-1 text-sm text-muted-color">
+        Sus modelos se descargan de Hugging Face y piden aceptar su licencia (uso no comercial). Para eso Klavyra necesita un token de tu cuenta.
+      </p>
+    </div>
+
+    @if (settings()?.worker?.huggingFaceToken) {
+      <div class="flex flex-wrap items-center gap-2">
+        <p-tag severity="success" value="Token guardado" icon="pi pi-key" />
+        <span class="flex-1"></span>
+        <p-button label="Comprobar acceso" icon="pi pi-sync" size="small" severity="secondary" [outlined]="true" [loading]="checking()" (onClick)="check()" />
+        <p-button label="Quitar token" icon="pi pi-trash" size="small" severity="danger" [text]="true" (onClick)="remove()" />
+      </div>
+    } @else if (settings()?.worker) {
+      <ol class="m-0 pl-5 flex flex-col gap-2 text-sm">
+        <li>Crea una cuenta gratis en <a href="https://huggingface.co/join" target="_blank" rel="noopener" class="text-primary font-semibold">huggingface.co</a>.</li>
+        <li>
+          Acepta la licencia de los modelos que quieras usar:
+          <a [href]="modelUrl('small')" target="_blank" rel="noopener" class="text-primary font-semibold">Small</a> ·
+          <a [href]="modelUrl('medium')" target="_blank" rel="noopener" class="text-primary font-semibold">Medium</a>.
+        </li>
+        <li>
+          Crea un token de tipo <strong>Read</strong> en
+          <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener" class="text-primary font-semibold">huggingface.co/settings/tokens</a>
+          y pégalo aquí:
+        </li>
+      </ol>
+      <form class="flex flex-wrap gap-2" (ngSubmit)="save()">
+        <p-password
+          name="token"
+          inputId="hf-token"
+          placeholder="hf_…"
+          [feedback]="false"
+          [toggleMask]="true"
+          autocomplete="off"
+          class="flex-1 min-w-60"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+          ariaLabel="Token de Hugging Face"
+          [ngModel]="token()"
+          (ngModelChange)="token.set($event)"
+        />
+        <p-button type="submit" label="Guardar" icon="pi pi-check" [loading]="saving()" [disabled]="!token().trim()" />
+      </form>
+      <p class="m-0 text-xs text-muted-color">
+        <i class="pi pi-lock text-xs mr-1"></i>El token se guarda solo en este equipo y únicamente se usa para descargar los modelos.
+      </p>
+    }
+
+    @if (tokenError(); as error) {
+      <p-message severity="error" [text]="error" />
+    }
+
+    @if (access(); as a) {
+      <div class="flex flex-col gap-2 text-sm">
+        <span>Cuenta: <strong>{{ a.user ?? '—' }}</strong></span>
+        <ul class="list-none m-0 p-0 flex flex-col gap-1.5">
+          @for (size of sizes; track size.value) {
+            <li class="flex flex-wrap items-center gap-2">
+              <span class="w-16 font-semibold">{{ size.label }}</span>
+              @switch (a.access[size.value]) {
+                @case (true) {
+                  <p-tag severity="success" value="Puedes usarlo" />
+                }
+                @case (false) {
+                  <p-tag severity="warn" value="Falta aceptar la licencia" />
+                  <a [href]="modelUrl(size.value)" target="_blank" rel="noopener" class="text-primary font-semibold">Aceptarla</a>
+                }
+                @default {
+                  <p-tag severity="secondary" value="No se pudo comprobar" />
+                }
+              }
+              @if (size.note) {
+                <span class="text-xs text-muted-color">({{ size.note }})</span>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </article>
+
+  <!-- About -->
+  <article class="rounded-2xl bg-surface-0 border border-surface-200 p-5 flex flex-col gap-3 text-sm">
+    <h2 class="k-display text-2xl font-normal m-0">Acerca de Klavyra</h2>
+    <p class="m-0">Versión <strong>{{ settings()?.version ?? '…' }}</strong> · Creado por <strong>Johel Roque</strong> · © 2026</p>
+    <p class="m-0">
+      Software libre · Licencia <strong>GNU AGPL-3.0</strong> ·
+      <a [href]="sourceUrl" target="_blank" rel="noopener" class="text-primary font-semibold">Código fuente</a>
+    </p>
+    <p class="m-0 text-muted-color">
+      Transcripción con ByteDance Piano Transcription (Apache-2.0) y MuScriptor (pesos CC BY-NC 4.0), pulso con Beat This! (MIT),
+      partitura con music21 y OpenSheetMusicDisplay, y sonido de piano Salamander Grand Piano (CC BY 3.0).
+    </p>
+  </article>
+</section>

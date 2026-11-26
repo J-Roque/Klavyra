@@ -9,6 +9,7 @@ CANDIDATES = [
     r"C:\Program Files\MuseScore 4\bin\MuseScore4.exe",
     "/Applications/MuseScore 4.app/Contents/MacOS/mscore",
 ]
+TIMEOUT_SECONDS = 300
 
 
 def musescore_exe() -> str | None:
@@ -22,8 +23,13 @@ def musescore_exe() -> str | None:
 
 
 def render_pdf(musicxml: Path, pdf: Path) -> bool:
+    """True if the PDF was written. It is optional: any trouble with MuseScore just means no PDF."""
     exe = musescore_exe()
     if not exe:
         return False
-    result = subprocess.run([exe, "-o", str(pdf), str(musicxml)], capture_output=True, timeout=300)
+    try:
+        result = subprocess.run([exe, "-o", str(pdf), str(musicxml)], capture_output=True, timeout=TIMEOUT_SECONDS)
+    except (subprocess.TimeoutExpired, OSError):  # a hung or broken MuseScore must not fail the whole transcription
+        pdf.unlink(missing_ok=True)
+        return False
     return result.returncode == 0 and pdf.exists()

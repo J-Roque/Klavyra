@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- The WebView2 package always references its WPF control too; Klavyra uses the WinForms one, and the WPF
+       assembly only brings a WindowsBase version conflict (MSB3277). -->
+  <Target Name="RemoveWebView2Wpf" AfterTargets="ResolvePackageAssets" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -35,7 +35,7 @@ export class ScoreView {
 
   private async render(): Promise<void> {
     try {
-      const { OpenSheetMusicDisplay, PointF2D } = await import('opensheetmusicdisplay');
+      const { OpenSheetMusicDisplay, PointF2D } = osmdExports(await import('opensheetmusicdisplay'));
       this.point = PointF2D;
       this.osmd = new OpenSheetMusicDisplay(this.container().nativeElement, {
         autoResize: true,
@@ -78,4 +78,14 @@ export class ScoreView {
       peek.moveToNext();
     }
   }
+}
+
+type OsmdModule = typeof import('opensheetmusicdisplay');
+
+/**
+ * OpenSheetMusicDisplay ships as a UMD bundle. The dev server exposes its classes as named exports, but the
+ * optimized build leaves them under `default`, so a production `new OpenSheetMusicDisplay` got undefined.
+ */
+export function osmdExports(module: OsmdModule | { default: OsmdModule }): OsmdModule {
+  return 'OpenSheetMusicDisplay' in module && module.OpenSheetMusicDisplay ? module : (module as { default: OsmdModule }).default;
 }

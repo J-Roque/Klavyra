@@ -1,6 +1,9 @@
 <section class="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col gap-6">
   <div class="flex flex-wrap items-end gap-3">
     <h1 class="k-display text-4xl font-normal m-0 mr-auto">Mi repertorio</h1>
+    @if (store.failedProjects().length; as count) {
+      <p-button [label]="'Eliminar fallidas (' + count + ')'" icon="pi pi-trash" severity="danger" [outlined]="true" (onClick)="removeFailed()" />
+    }
     <p-iconfield>
       <p-inputicon styleClass="pi pi-search" />
       <input pInputText placeholder="Buscar" aria-label="Buscar" [ngModel]="search()" (ngModelChange)="search.set($event)" />
@@ -43,17 +46,30 @@
         @if (p.status === 'Failed') {
           <p-tag class="absolute top-3 left-3" [value]="statusLabel[p.status]" [severity]="severity(p.status)" [pTooltip]="p.error ?? ''" />
         }
-        <p-button
-          class="absolute right-2 bottom-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity"
-          icon="pi pi-trash"
-          size="small"
-          [text]="true"
-          severity="secondary"
-          ariaLabel="Eliminar"
-          [disabled]="!isFinished(p)"
-          (onClick)="remove(p)"
-          pTooltip="Eliminar"
-        />
+        @if (isFinished(p)) {
+          <p-button
+            class="absolute right-2 bottom-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity"
+            icon="pi pi-trash"
+            size="small"
+            [text]="true"
+            severity="secondary"
+            ariaLabel="Eliminar"
+            (onClick)="remove(p)"
+            pTooltip="Eliminar"
+          />
+        } @else {
+          <p-button
+            class="absolute right-2 bottom-3"
+            icon="pi pi-times"
+            size="small"
+            [text]="true"
+            severity="secondary"
+            ariaLabel="Cancelar transcripción"
+            [disabled]="p.message === 'Cancelando…'"
+            (onClick)="cancel(p)"
+            pTooltip="Cancelar transcripción"
+          />
+        }
       </article>
     }
   </div>

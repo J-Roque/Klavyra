@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -11,6 +12,7 @@ import { ProgressBar } from 'primeng/progressbar';
 import { Tag } from 'primeng/tag';
 import { Tooltip } from 'primeng/tooltip';
 import { ENGINE_LABEL, isFinished, Project, STATUS_LABEL } from '../../core/models';
+import { deleteError } from '../../core/projects-api';
 import { ProjectsStore } from '../../core/projects-store';
 import { statusSeverity } from '../../core/status';
 import { NotePreview } from './note-preview';
@@ -36,6 +38,42 @@ export class Projects {
     return q ? this.store.projects().filter((p) => p.title.toLowerCase().includes(q)) : this.store.projects();
   });
 
+  protected removeFailed(): void {
+    const failed = this.store.failedProjects();
+    this.confirm.confirm({
+      header: 'Eliminar transcripciones fallidas',
+      message:
+        failed.length === 1
+          ? `¿Eliminar «${failed[0].title}» y sus archivos?`
+          : `¿Eliminar las ${failed.length} transcripciones que fallaron y sus archivos?`,
+      icon: 'pi pi-trash',
+      acceptLabel: 'Eliminar',
+      rejectLabel: 'Cancelar',
+      acceptButtonProps: { severity: 'danger' },
+      rejectButtonProps: { severity: 'secondary', outlined: true },
+      accept: () =>
+        this.store.deleteMany(failed.map((p) => p.id)).subscribe((failures) => {
+          if (failures) this.messages.add({ severity: 'error', summary: `No se pudieron eliminar ${failures}` });
+        }),
+    });
+  }
+
+  protected cancel(project: Project): void {
+    this.confirm.confirm({
+      header: 'Cancelar transcripción',
+      message: `¿Cancelar «${project.title}»? Podrás reintentarla después.`,
+      icon: 'pi pi-times-circle',
+      acceptLabel: 'Cancelar transcripción',
+      rejectLabel: 'Seguir',
+      acceptButtonProps: { severity: 'danger' },
+      rejectButtonProps: { severity: 'secondary', outlined: true },
+      accept: () =>
+        this.store.cancel(project.id).subscribe({
+          error: () => this.messages.add({ severity: 'error', summary: 'No se pudo cancelar', detail: 'Puede que ya haya terminado.' }),
+        }),
+    });
+  }
+
   protected remove(project: Project): void {
     this.confirm.confirm({
       header: 'Eliminar transcripción',
@@ -47,7 +85,7 @@ export class Projects {
       rejectButtonProps: { severity: 'secondary', outlined: true },
       accept: () =>
         this.store.delete(project.id).subscribe({
-          error: () => this.messages.add({ severity: 'error', summary: 'No se pudo eliminar' }),
+          error: (e: HttpErrorResponse) => this.messages.add({ severity: 'error', summary: 'No se pudo eliminar', detail: deleteError(e) }),
         }),
     });
   }
